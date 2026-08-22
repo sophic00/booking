@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -16,7 +17,7 @@ type Config struct {
 	JWTExpirationHours int
 	SeatHoldTTL        time.Duration
 	WaitlistOfferTTL   time.Duration
-	CORSAllowedOrigins string
+	CORSAllowedOrigins []string
 	Environment        string
 
 	// Email config
@@ -41,7 +42,7 @@ func Load() *Config {
 		JWTExpirationHours: getEnvAsInt("JWT_EXPIRATION_HOURS", 72),
 		SeatHoldTTL:        time.Duration(getEnvAsInt("SEAT_HOLD_TTL_MINUTES", 10)) * time.Minute,
 		WaitlistOfferTTL:   time.Duration(getEnvAsInt("WAITLIST_OFFER_TTL_MINUTES", 10)) * time.Minute,
-		CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "*"),
+		CORSAllowedOrigins: getEnvAsSlice("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000", "http://localhost:5173", "http://localhost:8080"}, ","),
 		Environment:        getEnv("APP_ENV", "development"),
 
 		SMTPServer:   getEnv("SMTP_SERVER", "localhost"),
@@ -53,6 +54,25 @@ func Load() *Config {
 	}
 
 	return cfg
+}
+
+func getEnvAsSlice(key string, fallback []string, sep string) []string {
+	val, ok := os.LookupEnv(key)
+	if !ok || strings.TrimSpace(val) == "" {
+		return fallback
+	}
+	parts := strings.Split(val, sep)
+	var result []string
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	if len(result) == 0 {
+		return fallback
+	}
+	return result
 }
 
 func getEnv(key, fallback string) string {
