@@ -1,2 +1,15 @@
 *.pdf
 .direnv/
+.env
+.env.local
+
+# Go build artifacts
+backend/bin/
+bin/
+
+# Node / Frontend artifacts
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/dist/
