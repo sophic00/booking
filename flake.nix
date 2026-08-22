@@ -21,6 +21,7 @@
             go
             gopls
             golangci-lint
+            sqlc
 
             # Node.js runtime & package manager for Next.js
             nodejs_24
@@ -32,6 +33,7 @@
             echo "  • Go:   $(go version 2>/dev/null || echo 'N/A')"
             echo "  • Node: $(node --version 2>/dev/null || echo 'N/A')"
             echo "  • Make: $(make --version 2>/dev/null | head -n 1)"
+            echo "  • sqlc: $(sqlc version 2>/dev/null || echo 'N/A')"
           '';
         };
       });
