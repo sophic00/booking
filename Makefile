@@ -1,4 +1,4 @@
-.PHONY: generate backend-build backend-run backend-test tidy migrate-up migrate-down migrate-status migrate-force
+.PHONY: generate backend-build backend-run backend-test tidy migrate-up migrate-down migrate-status migrate-force frontend-install frontend-dev frontend-build frontend-lint
 
 generate:
 	cd backend && sqlc generate
@@ -26,3 +26,15 @@ migrate-status:
 
 migrate-force:
 	cd backend && go run cmd/migrate/main.go force $(v)
+
+frontend-install:
+	cd frontend && npm install
+
+frontend-dev:
+	cd frontend && npm run dev
+
+frontend-build:
+	cd frontend && npm run build
+
+frontend-lint:
+	cd frontend && npm run lint
