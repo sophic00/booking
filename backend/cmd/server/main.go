@@ -39,6 +39,7 @@ func main() {
 	// Initialize SQLC queries and HTTP handlers
 	queries := generated.New(database.Pool)
 	authHandler := handlers.NewAuthHandler(queries, cfg)
+	venueHandler := handlers.NewVenueHandler(queries, database.Pool)
 
 	r := chi.NewRouter()
 
@@ -76,7 +77,7 @@ func main() {
 
 	// API v1 Routes
 	r.Route("/api/v1", func(r chi.Router) {
-		// Auth Routes
+		// Public Auth Routes
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/register", authHandler.Register)
 			r.Post("/login", authHandler.Login)
@@ -88,32 +89,52 @@ func main() {
 			})
 		})
 
-		// Sample Protected RBAC Route Groups
-		r.Group(func(r chi.Router) {
+		// Public/Authenticated Venue & Category Read Routes
+		r.Get("/categories", venueHandler.ListCategories)
+		r.Get("/venues", venueHandler.ListVenues)
+		r.Get("/venues/{id}", venueHandler.GetVenue)
+		r.Get("/venues/{id}/seats", venueHandler.GetVenueSeats)
+
+		// Protected Admin Routes
+		r.Route("/admin", func(r chi.Router) {
 			r.Use(appmiddleware.Authenticate(cfg.JWTSecret))
+			r.Use(appmiddleware.AdminOnly)
 
-			// Admin-only subroutes
-			r.Group(func(r chi.Router) {
-				r.Use(appmiddleware.AdminOnly)
-				r.Get("/admin/ping", func(w http.ResponseWriter, r *http.Request) {
-					handlers.RespondSuccess(w, http.StatusOK, map[string]string{"role": "ADMIN"}, "Admin access verified")
-				})
+			r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
+				handlers.RespondSuccess(w, http.StatusOK, map[string]string{"role": "ADMIN"}, "Admin access verified")
 			})
 
-			// Organiser-only subroutes
-			r.Group(func(r chi.Router) {
-				r.Use(appmiddleware.OrganiserOnly)
-				r.Get("/organiser/ping", func(w http.ResponseWriter, r *http.Request) {
-					handlers.RespondSuccess(w, http.StatusOK, map[string]string{"role": "ORGANISER"}, "Organiser access verified")
-				})
-			})
+			// Categories Admin CRUD
+			r.Post("/categories", venueHandler.CreateCategory)
 
-			// Customer-only subroutes
-			r.Group(func(r chi.Router) {
-				r.Use(appmiddleware.CustomerOnly)
-				r.Get("/customer/ping", func(w http.ResponseWriter, r *http.Request) {
-					handlers.RespondSuccess(w, http.StatusOK, map[string]string{"role": "CUSTOMER"}, "Customer access verified")
-				})
+			// Venues Admin CRUD & Layout Configuration
+			r.Post("/venues", venueHandler.CreateVenue)
+			r.Put("/venues/{id}", venueHandler.UpdateVenue)
+			r.Delete("/venues/{id}", venueHandler.DeleteVenue)
+
+			// Seat Layout Endpoints
+			r.Post("/venues/{id}/seats", venueHandler.CreateSeat)
+			r.Post("/venues/{id}/seats/batch", venueHandler.BatchCreateSeats)
+			r.Delete("/venues/{id}/seats", venueHandler.DeleteVenueSeats)
+		})
+
+		// Protected Organiser Routes
+		r.Route("/organiser", func(r chi.Router) {
+			r.Use(appmiddleware.Authenticate(cfg.JWTSecret))
+			r.Use(appmiddleware.OrganiserOnly)
+
+			r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
+				handlers.RespondSuccess(w, http.StatusOK, map[string]string{"role": "ORGANISER"}, "Organiser access verified")
+			})
+		})
+
+		// Protected Customer Routes
+		r.Route("/customer", func(r chi.Router) {
+			r.Use(appmiddleware.Authenticate(cfg.JWTSecret))
+			r.Use(appmiddleware.CustomerOnly)
+
+			r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
+				handlers.RespondSuccess(w, http.StatusOK, map[string]string{"role": "CUSTOMER"}, "Customer access verified")
 			})
 		})
 	})
