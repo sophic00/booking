@@ -29,22 +29,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
       } else {
-        // Provide a default active customer session for seamless previewing
-        const demoUser: User = {
-          id: "usr-demo-01",
-          email: "alex.rivera@example.com",
-          full_name: "Alex Rivera",
-          phone: "+1 (555) 234-8901",
-          role: "CUSTOMER",
-          created_at: new Date().toISOString(),
-        };
-        setUser(demoUser);
-        setToken("demo-token-123");
-        localStorage.setItem("velvet_user_profile", JSON.stringify(demoUser));
-        localStorage.setItem("velvet_auth_token", "demo-token-123");
+        setToken(null);
+        setUser(null);
       }
     } catch {
-      // ignore
+      setToken(null);
+      setUser(null);
     } finally {
       setIsLoading(false);
     }

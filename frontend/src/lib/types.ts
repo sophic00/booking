@@ -155,8 +155,85 @@ export interface EventAnalytics {
   confirmed_bookings_count: number;
   cancelled_bookings_count: number;
   valid_tickets_count: number;
+  checked_in_tickets_count?: number;
   total_revenue: number;
   occupancy_percentage: number;
   waitlist_waiting_count: number;
   category_breakdown: CategoryBreakdown[];
+}
+
+export interface TicketVerificationResult {
+  is_valid: boolean;
+  can_check_in: boolean;
+  validation_message: string;
+  ticket: {
+    id: string;
+    status: "VALID" | "CHECKED_IN" | "CANCELLED" | string;
+    unit_price: number;
+    qr_code_payload: string;
+    created_at: string;
+    checked_in_at?: string | null;
+  };
+  booking: {
+    id: string;
+    booking_reference: string;
+    status: string;
+    customer_id: string;
+    customer_name: string;
+    customer_email: string;
+  };
+  event: {
+    id: string;
+    organiser_id: string;
+    title: string;
+    start_time: string;
+    end_time: string;
+    status: string;
+    poster_url?: string | null;
+  };
+  venue: {
+    id: string;
+    name: string;
+    address: string;
+    city: string;
+  };
+  seat: {
+    id: string;
+    row_label: string;
+    seat_number: string;
+    grid_row: number;
+    grid_col: number;
+    seat_category_id: string;
+    category_name: string;
+    category_color: string;
+  };
+}
+
+export interface EventTicketItem {
+  id: string;
+  booking_id: string;
+  booking_reference: string;
+  customer_id: string;
+  customer_name: string;
+  customer_email: string;
+  seat_id: string;
+  row_label: string;
+  seat_number: string;
+  category_name: string;
+  category_color: string;
+  unit_price: number;
+  qr_code_payload: string;
+  status: "VALID" | "CHECKED_IN" | "CANCELLED" | string;
+  created_at: string;
+  checked_in_at?: string | null;
+}
+
+export interface EventCheckInOverview {
+  event_id: string;
+  total_tickets: number;
+  valid_count: number;
+  checked_in_count: number;
+  cancelled_count: number;
+  check_in_rate: number;
+  tickets?: EventTicketItem[];
 }
