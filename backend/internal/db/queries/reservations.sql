@@ -88,12 +88,12 @@ ORDER BY s.grid_row ASC, s.grid_col ASC;
 
 -- name: GetExpiredSeatHolds :many
 SELECT * FROM seat_reservations
-WHERE status IN ('HELD', 'OFFERED') AND expires_at <= NOW();
+WHERE status = 'HELD' AND expires_at <= NOW();
 
 -- name: BulkReleaseExpiredHolds :execrows
 UPDATE seat_reservations
 SET status = 'RELEASED', updated_at = NOW()
-WHERE status IN ('HELD', 'OFFERED') AND expires_at <= NOW();
+WHERE status = 'HELD' AND expires_at <= NOW();
 
 -- name: ConfirmReservationToBooked :execrows
 UPDATE seat_reservations
@@ -103,5 +103,5 @@ WHERE event_id = $1 AND hold_token = $2 AND status IN ('HELD', 'OFFERED');
 -- name: ReleaseExpiredSeatHold :execrows
 UPDATE seat_reservations
 SET status = 'RELEASED', updated_at = NOW()
-WHERE event_id = $1 AND seat_id = $2 AND status IN ('HELD', 'OFFERED') AND expires_at <= NOW();
+WHERE event_id = $1 AND seat_id = $2 AND status = 'HELD' AND expires_at <= NOW();
 

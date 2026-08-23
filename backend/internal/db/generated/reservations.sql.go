@@ -14,7 +14,7 @@ import (
 const bulkReleaseExpiredHolds = `-- name: BulkReleaseExpiredHolds :execrows
 UPDATE seat_reservations
 SET status = 'RELEASED', updated_at = NOW()
-WHERE status IN ('HELD', 'OFFERED') AND expires_at <= NOW()
+WHERE status = 'HELD' AND expires_at <= NOW()
 `
 
 func (q *Queries) BulkReleaseExpiredHolds(ctx context.Context) (int64, error) {
@@ -306,7 +306,7 @@ func (q *Queries) GetEventSeatMapWithStatus(ctx context.Context, id pgtype.UUID)
 
 const getExpiredSeatHolds = `-- name: GetExpiredSeatHolds :many
 SELECT id, event_id, seat_id, user_id, status, hold_token, expires_at, booking_id, created_at, updated_at FROM seat_reservations
-WHERE status IN ('HELD', 'OFFERED') AND expires_at <= NOW()
+WHERE status = 'HELD' AND expires_at <= NOW()
 `
 
 func (q *Queries) GetExpiredSeatHolds(ctx context.Context) ([]SeatReservation, error) {
@@ -343,7 +343,7 @@ func (q *Queries) GetExpiredSeatHolds(ctx context.Context) ([]SeatReservation, e
 const releaseExpiredSeatHold = `-- name: ReleaseExpiredSeatHold :execrows
 UPDATE seat_reservations
 SET status = 'RELEASED', updated_at = NOW()
-WHERE event_id = $1 AND seat_id = $2 AND status IN ('HELD', 'OFFERED') AND expires_at <= NOW()
+WHERE event_id = $1 AND seat_id = $2 AND status = 'HELD' AND expires_at <= NOW()
 `
 
 type ReleaseExpiredSeatHoldParams struct {
