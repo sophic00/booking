@@ -272,7 +272,24 @@ func TestCancelBooking_Success(t *testing.T) {
 	customerID := uuid.New()
 	bookingID := uuid.New()
 
-	mock := &mockBookingQuerier{}
+	mock := &mockBookingQuerier{
+		getBookingByIDFunc: func(ctx context.Context, id pgtype.UUID) (generated.GetBookingByIDRow, error) {
+			return generated.GetBookingByIDRow{
+				ID:             id,
+				CustomerID:     utils.UUIDToPgtype(customerID),
+				Status:         generated.BookingStatusCONFIRMED,
+				EventStartTime: pgtype.Timestamptz{Time: time.Now().Add(24 * time.Hour), Valid: true},
+			}, nil
+		},
+		getTicketsByBookingIDFunc: func(ctx context.Context, bookingID pgtype.UUID) ([]generated.GetTicketsByBookingIDRow, error) {
+			return []generated.GetTicketsByBookingIDRow{
+				{
+					ID:     utils.UUIDToPgtype(uuid.New()),
+					Status: generated.TicketStatusVALID,
+				},
+			}, nil
+		},
+	}
 	handler := NewBookingHandler(mock, nil, &config.Config{JWTSecret: "test-secret"}, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/customer/bookings/"+bookingID.String()+"/cancel", nil)
@@ -286,4 +303,73 @@ func TestCancelBooking_Success(t *testing.T) {
 	r.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
+func TestCancelBooking_EventAlreadyStarted(t *testing.T) {
+	customerID := uuid.New()
+	bookingID := uuid.New()
+
+	mock := &mockBookingQuerier{
+		getBookingByIDFunc: func(ctx context.Context, id pgtype.UUID) (generated.GetBookingByIDRow, error) {
+			return generated.GetBookingByIDRow{
+				ID:             id,
+				CustomerID:     utils.UUIDToPgtype(customerID),
+				Status:         generated.BookingStatusCONFIRMED,
+				EventStartTime: pgtype.Timestamptz{Time: time.Now().Add(-2 * time.Hour), Valid: true},
+			}, nil
+		},
+	}
+	handler := NewBookingHandler(mock, nil, &config.Config{JWTSecret: "test-secret"}, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/customer/bookings/"+bookingID.String()+"/cancel", nil)
+	token, _, _ := auth.GenerateToken(customerID, "cust@example.com", "CUSTOMER", "test-secret", 1)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+
+	r := chi.NewRouter()
+	r.Use(middleware.Authenticate("test-secret"))
+	r.Post("/api/v1/customer/bookings/{id}/cancel", handler.CancelBooking)
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "EVENT_ALREADY_STARTED")
+}
+
+func TestCancelBooking_TicketAlreadyCheckedIn(t *testing.T) {
+	customerID := uuid.New()
+	bookingID := uuid.New()
+
+	mock := &mockBookingQuerier{
+		getBookingByIDFunc: func(ctx context.Context, id pgtype.UUID) (generated.GetBookingByIDRow, error) {
+			return generated.GetBookingByIDRow{
+				ID:             id,
+				CustomerID:     utils.UUIDToPgtype(customerID),
+				Status:         generated.BookingStatusCONFIRMED,
+				EventStartTime: pgtype.Timestamptz{Time: time.Now().Add(24 * time.Hour), Valid: true},
+			}, nil
+		},
+		getTicketsByBookingIDFunc: func(ctx context.Context, bookingID pgtype.UUID) ([]generated.GetTicketsByBookingIDRow, error) {
+			return []generated.GetTicketsByBookingIDRow{
+				{
+					ID:          utils.UUIDToPgtype(uuid.New()),
+					Status:      generated.TicketStatusCHECKEDIN,
+					CheckedInAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+				},
+			}, nil
+		},
+	}
+	handler := NewBookingHandler(mock, nil, &config.Config{JWTSecret: "test-secret"}, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/customer/bookings/"+bookingID.String()+"/cancel", nil)
+	token, _, _ := auth.GenerateToken(customerID, "cust@example.com", "CUSTOMER", "test-secret", 1)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+
+	r := chi.NewRouter()
+	r.Use(middleware.Authenticate("test-secret"))
+	r.Post("/api/v1/customer/bookings/{id}/cancel", handler.CancelBooking)
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "TICKET_ALREADY_CHECKED_IN")
 }

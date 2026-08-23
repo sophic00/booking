@@ -564,6 +564,43 @@ func (h *BookingHandler) CancelBooking(w http.ResponseWriter, r *http.Request) {
 	bookingPgUUID := utils.UUIDToPgtype(bookingID)
 	customerPgUUID := utils.UUIDToPgtype(customerID)
 
+	existingBooking, err := h.queries.GetBookingByID(r.Context(), bookingPgUUID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			RespondError(w, http.StatusNotFound, "BOOKING_NOT_FOUND", "confirmed booking not found or already cancelled")
+			return
+		}
+		RespondError(w, http.StatusInternalServerError, "DB_ERROR", "failed to retrieve booking")
+		return
+	}
+
+	if utils.PgtypeToUUID(existingBooking.CustomerID) != customerID {
+		RespondError(w, http.StatusForbidden, "FORBIDDEN", "this booking belongs to another account")
+		return
+	}
+
+	if existingBooking.Status != generated.BookingStatusCONFIRMED {
+		RespondError(w, http.StatusBadRequest, "BOOKING_NOT_CONFIRMED", "only confirmed bookings can be cancelled")
+		return
+	}
+
+	if existingBooking.EventStartTime.Valid && utils.PgtypeToTime(existingBooking.EventStartTime).Before(time.Now()) {
+		RespondError(w, http.StatusBadRequest, "EVENT_ALREADY_STARTED", "cannot cancel booking for an event that has already started")
+		return
+	}
+
+	tickets, err := h.queries.GetTicketsByBookingID(r.Context(), bookingPgUUID)
+	if err != nil {
+		RespondError(w, http.StatusInternalServerError, "DB_ERROR", "failed to check tickets status")
+		return
+	}
+	for _, t := range tickets {
+		if t.Status == generated.TicketStatusCHECKEDIN || t.CheckedInAt.Valid {
+			RespondError(w, http.StatusBadRequest, "TICKET_ALREADY_CHECKED_IN", "cannot cancel booking with checked-in tickets")
+			return
+		}
+	}
+
 	var cancelledBooking generated.Booking
 
 	if h.pool != nil {
