@@ -315,9 +315,15 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             Pricing Tiers
           </span>
           <div className="flex md:flex-col gap-3 md:gap-1 mt-1 text-xs">
-            <span className="text-purple-400 font-bold">VIP: $240+</span>
-            <span className="text-indigo-400 font-bold">Premium: $140</span>
-            <span className="text-blue-400 font-bold">Standard: $65</span>
+            {categories.length > 0 ? (
+              categories.map((c) => (
+                <span key={c.id} className="font-bold font-mono" style={{ color: c.color || "#818cf8" }}>
+                  {c.name}: ${c.price.toFixed(2)}
+                </span>
+              ))
+            ) : (
+              <span className="text-slate-400 font-mono text-xs">General Admission</span>
+            )}
           </div>
         </div>
       </div>
@@ -389,18 +395,12 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* Seat Map Legend */}
             <div className="flex flex-wrap items-center gap-3 text-[11px] font-medium text-slate-300">
-              <div className="flex items-center space-x-1.5">
-                <span className="w-3.5 h-3.5 rounded bg-purple-500" />
-                <span>VIP ($240)</span>
-              </div>
-              <div className="flex items-center space-x-1.5">
-                <span className="w-3.5 h-3.5 rounded bg-indigo-500" />
-                <span>Premium ($140)</span>
-              </div>
-              <div className="flex items-center space-x-1.5">
-                <span className="w-3.5 h-3.5 rounded bg-blue-500" />
-                <span>Standard ($65)</span>
-              </div>
+              {categories.map((cat) => (
+                <div key={cat.id} className="flex items-center space-x-1.5">
+                  <span className="w-3.5 h-3.5 rounded" style={{ backgroundColor: cat.color || "#6366f1" }} />
+                  <span>{cat.name} (${cat.price.toFixed(2)})</span>
+                </div>
+              ))}
               <div className="flex items-center space-x-1.5">
                 <span className="w-3.5 h-3.5 rounded bg-slate-700 opacity-40" />
                 <span>Occupied</span>
@@ -430,19 +430,17 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                     const isBooked = seat.status === "BOOKED";
                     const isHeldByOther = seat.status === "HELD" && !seat.is_my_hold;
 
-                    let bgClass = "bg-blue-600/70 hover:bg-blue-500";
-                    if (seat.seat_category_id === "cat-vip") {
-                      bgClass = "bg-purple-600/80 hover:bg-purple-500";
-                    } else if (seat.seat_category_id === "cat-prem") {
-                      bgClass = "bg-indigo-600/80 hover:bg-indigo-500";
-                    }
+                    let bgClass = "text-white hover:brightness-110";
+                    let customStyle: React.CSSProperties | undefined = undefined;
 
                     if (isSelected) {
-                      bgClass = "bg-emerald-500 ring-2 ring-white scale-110 shadow-lg shadow-emerald-500/50";
+                      bgClass = "bg-emerald-500 ring-2 ring-white scale-110 shadow-lg shadow-emerald-500/50 text-white";
                     } else if (isBooked) {
                       bgClass = "bg-slate-800/40 text-slate-600 cursor-not-allowed border border-slate-800";
                     } else if (isHeldByOther) {
                       bgClass = "bg-amber-600/30 text-amber-500/50 cursor-not-allowed border border-amber-500/20";
+                    } else {
+                      customStyle = { backgroundColor: seat.category_color || "#3b82f6" };
                     }
 
                     return (
@@ -450,6 +448,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                         key={seat.seat_id}
                         disabled={isBooked || isHeldByOther}
                         onClick={() => toggleSeat(seat)}
+                        style={customStyle}
                         title={`${rowLabel}${seat.seat_number} - ${seat.category_name} ($${seat.price}) - ${seat.status}`}
                         className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg text-[10px] font-bold font-mono transition-all flex items-center justify-center ${bgClass}`}
                       >
