@@ -77,6 +77,22 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     loadData();
   }, [eventId]);
 
+  // Real-Time Background Seat Map Polling
+  useEffect(() => {
+    if (loading || isCheckingOut) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const updatedSeats = await fetchEventSeatMap(eventId);
+        setSeatMap(updatedSeats);
+      } catch {
+        // Silent catch for background polling errors
+      }
+    }, 4000);
+
+    return () => clearInterval(pollInterval);
+  }, [eventId, loading, isCheckingOut]);
+
   // Hold TTL Countdown Timer
   useEffect(() => {
     if (holdSecondsRemaining === null || holdSecondsRemaining <= 0) return;
