@@ -15,15 +15,18 @@ import {
   ShieldCheck,
   AlertCircle,
   Lock,
+  Sparkles,
+  Users,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { fetchCustomerBookings, cancelBooking } from "../../lib/api";
-import { Booking } from "../../lib/types";
+import { fetchCustomerBookings, cancelBooking, fetchCustomerWaitlists } from "../../lib/api";
+import { Booking, WaitlistEntry } from "../../lib/types";
 import { useAuth } from "../../context/AuthContext";
 
 export default function MyBookingsPage() {
   const { user, isLoading: authLoading } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [waitlists, setWaitlists] = useState<WaitlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedBookingForQR, setSelectedBookingForQR] = useState<Booking | null>(null);
@@ -37,11 +40,16 @@ export default function MyBookingsPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchCustomerBookings();
-      setBookings(data);
+      const [bData, wData] = await Promise.all([
+        fetchCustomerBookings(),
+        fetchCustomerWaitlists().catch(() => []),
+      ]);
+      setBookings(bData);
+      setWaitlists(wData);
     } catch (err: any) {
       setError(err.message || "Failed to load bookings from backend API");
       setBookings([]);
+      setWaitlists([]);
     } finally {
       setLoading(false);
     }
@@ -138,6 +146,98 @@ export default function MyBookingsPage() {
           <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
         </Link>
       </div>
+
+      {/* Active Waitlist Entries & Seat Reallocation Offers Section */}
+      {waitlists.length > 0 && (
+        <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-slate-800 bg-[#131A26] shadow-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center space-x-2">
+              <Users className="w-5 h-5 text-indigo-400" />
+              <h3 className="text-base font-bold text-white">
+                My Waitlist Entries & Reallocation Offers ({waitlists.length})
+              </h3>
+            </div>
+            <span className="text-[11px] font-mono text-slate-400">
+              FIFO Auto-Reallocation Active
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {waitlists.map((w) => {
+              const isOffered = w.status === "OFFERED";
+              const isWaiting = w.status === "WAITING";
+
+              return (
+                <div
+                  key={w.id}
+                  className={`p-4 rounded-2xl border ${
+                    isOffered
+                      ? "bg-emerald-950/20 border-emerald-500/40 shadow-lg shadow-emerald-500/10 animate-pulse"
+                      : "bg-[#0B0F17] border-slate-800"
+                  } space-y-3 flex flex-col justify-between`}
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span
+                        className="text-[11px] font-bold font-mono px-2 py-0.5 rounded flex items-center"
+                        style={{
+                          backgroundColor: `${w.category_color || "#3B82F6"}25`,
+                          color: w.category_color || "#3B82F6",
+                          border: `1px solid ${w.category_color || "#3B82F6"}50`,
+                        }}
+                      >
+                        {w.category_name || "Tier"} Category
+                      </span>
+
+                      <span
+                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase ${
+                          isOffered
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                            : isWaiting
+                            ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                            : "bg-slate-800 text-slate-400"
+                        }`}
+                      >
+                        {isOffered ? "🎉 SEAT OFFERED" : isWaiting ? `QUEUE POSITION #${w.queue_position}` : w.status}
+                      </span>
+                    </div>
+
+                    <h4 className="text-sm font-bold text-white">
+                      {w.event_title || "Sold-Out Performance"}
+                    </h4>
+
+                    {w.event_start_time && (
+                      <p className="text-[11px] text-slate-400 flex items-center">
+                        <Calendar className="w-3 h-3 mr-1 text-slate-500" />
+                        {new Date(w.event_start_time).toLocaleDateString("en-US", {
+                          weekday: "short",
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </p>
+                    )}
+                  </div>
+
+                  {isOffered && (
+                    <div className="pt-2 border-t border-emerald-500/20 flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                        Time-limited offer active!
+                      </span>
+                      <Link
+                        href={`/waitlist/offer?event=${w.event_id}`}
+                        className="px-3 py-1.5 rounded-xl font-bold text-xs text-white bg-emerald-600 hover:bg-emerald-500 transition shadow-md shadow-emerald-600/30 flex items-center"
+                      >
+                        Claim Seat Now
+                        <ArrowRight className="w-3 h-3 ml-1" />
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Bookings List / Error Banner */}
       {loading ? (

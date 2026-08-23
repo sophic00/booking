@@ -26,6 +26,8 @@ import {
   ShieldCheck,
   UserCheck,
   Search,
+  Globe,
+  Radio,
 } from "lucide-react";
 import {
   fetchOrganiserAnalytics,
@@ -35,6 +37,11 @@ import {
   verifyTicket,
   checkInTicket,
   fetchEventTickets,
+  fetchVenues,
+  fetchCategories,
+  publishEvent,
+  cancelEvent,
+  setEventPricing,
 } from "../../lib/api";
 import {
   EventAnalytics,
@@ -42,6 +49,8 @@ import {
   TicketVerificationResult,
   EventTicketItem,
   EventCheckInOverview,
+  Venue,
+  SeatCategory,
 } from "../../lib/types";
 import { useAuth } from "../../context/AuthContext";
 
@@ -49,9 +58,15 @@ export default function OrganiserPage() {
   const { user, isLoading: authLoading } = useAuth();
   const [analytics, setAnalytics] = useState<EventAnalytics | null>(null);
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [categories, setCategories] = useState<SeatCategory[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Publishing & Event Actions State
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [isCancellingEvent, setIsCancellingEvent] = useState(false);
 
   // Ticket Gate Scanner & Check-In State
   const [scannerInput, setScannerInput] = useState<string>("");
@@ -69,8 +84,9 @@ export default function OrganiserPage() {
   const [newEventTitle, setNewEventTitle] = useState("");
   const [newEventType, setNewEventType] = useState("CONCERT");
   const [newEventDate, setNewEventDate] = useState("2026-11-20T20:00");
-  const [newEventVenue, setNewEventVenue] = useState("");
+  const [newEventVenueId, setNewEventVenueId] = useState("");
   const [holdTTL, setHoldTTL] = useState(600);
+  const [categoryPrices, setCategoryPrices] = useState<Record<string, number>>({});
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -95,14 +111,29 @@ export default function OrganiserPage() {
     setLoading(true);
     setError(null);
     try {
-      // Try fetching organiser-specific events first, fallback to published events
-      let evs: EventItem[] = [];
-      try {
-        evs = await fetchOrganiserEvents();
-      } catch {
-        evs = await fetchEvents();
-      }
+      const [evs, vList, cList] = await Promise.all([
+        fetchOrganiserEvents().catch(() => fetchEvents()),
+        fetchVenues().catch(() => []),
+        fetchCategories().catch(() => []),
+      ]);
+
       setEvents(evs);
+      setVenues(vList);
+      setCategories(cList);
+
+      if (vList.length > 0 && !newEventVenueId) {
+        setNewEventVenueId(vList[0].id);
+      }
+
+      // Initial category prices
+      const initialPrices: Record<string, number> = {};
+      cList.forEach((c) => {
+        if (c.name.toLowerCase().includes("vip")) initialPrices[c.id] = 240;
+        else if (c.name.toLowerCase().includes("premium")) initialPrices[c.id] = 140;
+        else initialPrices[c.id] = 65;
+      });
+      setCategoryPrices(initialPrices);
+
       if (evs.length > 0) {
         const targetId = selectedEventId && evs.some((e) => e.id === selectedEventId)
           ? selectedEventId
@@ -195,20 +226,63 @@ export default function OrganiserPage() {
     }
   };
 
+  const handlePublishEvent = async (eventId: string) => {
+    setIsPublishing(true);
+    try {
+      await publishEvent(eventId);
+      setActionSuccessMessage("🚀 Event published successfully! It is now live in the customer marketplace.");
+      await loadEvents();
+    } catch (err: any) {
+      setVerifyError(err.message || "Failed to publish event");
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  const handleCancelEventAction = async (eventId: string) => {
+    if (!window.confirm("Are you sure you want to cancel this event? All active tickets will be voided and waitlists stopped.")) return;
+    setIsCancellingEvent(true);
+    try {
+      await cancelEvent(eventId);
+      setActionSuccessMessage("Event cancelled.");
+      await loadEvents();
+    } catch (err: any) {
+      setVerifyError(err.message || "Failed to cancel event");
+    } finally {
+      setIsCancellingEvent(false);
+    }
+  };
+
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError(null);
+    if (!newEventVenueId) {
+      setCreateError("Please select a venue for your event.");
+      return;
+    }
     setIsCreating(true);
 
     try {
-      await createOrganiserEvent({
-        venue_id: newEventVenue || "00000000-0000-0000-0000-000000000001",
-        title: newEventTitle,
+      const created = await createOrganiserEvent({
+        venue_id: newEventVenueId,
+        title: newEventTitle.trim(),
         event_type: newEventType,
         start_time: new Date(newEventDate).toISOString(),
         end_time: new Date(new Date(newEventDate).getTime() + 3 * 3600 * 1000).toISOString(),
         hold_ttl_seconds: holdTTL,
       });
+
+      // Set category pricing
+      const pricingPayload = Object.entries(categoryPrices).map(([catId, price]) => ({
+        seat_category_id: catId,
+        price: Number(price) || 0,
+        currency: "USD",
+      }));
+
+      if (pricingPayload.length > 0) {
+        await setEventPricing(created.id, pricingPayload).catch(() => {});
+      }
+
       alert(`🎉 New event listing "${newEventTitle}" created successfully in Draft mode.`);
       setShowCreateModal(false);
       setNewEventTitle("");
@@ -280,32 +354,76 @@ export default function OrganiserPage() {
         </button>
       </div>
 
-      {/* Select Event Filter */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-[#131A26] p-4 rounded-2xl border border-slate-800">
-        <div className="flex items-center space-x-3">
-          <span className="text-xs font-semibold text-slate-400 uppercase font-mono">
-            Active Event:
-          </span>
-          <select
-            value={selectedEventId}
-            onChange={(e) => setSelectedEventId(e.target.value)}
-            className="bg-[#0B0F17] border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-100 focus:outline-none focus:border-violet-500 transition cursor-pointer"
-          >
-            {events.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.title} ({e.venue_city})
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* Select Event Filter & Status Toolbar */}
+      {events.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-4 bg-[#131A26] p-4 rounded-2xl border border-slate-800">
+          <div className="flex items-center space-x-3">
+            <span className="text-xs font-semibold text-slate-400 uppercase font-mono">
+              Active Event:
+            </span>
+            <select
+              value={selectedEventId}
+              onChange={(e) => setSelectedEventId(e.target.value)}
+              className="bg-[#0B0F17] border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-100 focus:outline-none focus:border-violet-500 transition cursor-pointer"
+            >
+              {events.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.title} ({e.venue_city}) • [{e.status || "PUBLISHED"}]
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <div className="flex items-center space-x-3 text-xs text-slate-400 font-mono">
-          <span className="flex items-center text-emerald-400 font-bold">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 mr-1.5 animate-pulse" />
-            Live Sales & Ticketing Active
-          </span>
+          {/* Event Lifecycle Controls */}
+          {(() => {
+            const cur = events.find((e) => e.id === selectedEventId);
+            const status = cur?.status || "PUBLISHED";
+
+            return (
+              <div className="flex items-center gap-3">
+                <span
+                  className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-full uppercase border ${
+                    status === "PUBLISHED"
+                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                      : status === "DRAFT"
+                      ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                      : "bg-rose-500/20 text-rose-300 border-rose-500/30"
+                  }`}
+                >
+                  {status === "PUBLISHED" && "● LIVE ON MARKETPLACE"}
+                  {status === "DRAFT" && "○ DRAFT (PRIVATE)"}
+                  {status === "CANCELLED" && "✕ CANCELLED"}
+                </span>
+
+                {status === "DRAFT" && (
+                  <button
+                    onClick={() => handlePublishEvent(selectedEventId)}
+                    disabled={isPublishing}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 transition shadow-md shadow-emerald-600/30 flex items-center"
+                  >
+                    {isPublishing ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1" />
+                    ) : (
+                      <Globe className="w-3.5 h-3.5 mr-1.5" />
+                    )}
+                    Publish Live
+                  </button>
+                )}
+
+                {status === "PUBLISHED" && (
+                  <button
+                    onClick={() => handleCancelEventAction(selectedEventId)}
+                    disabled={isCancellingEvent}
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-400 hover:text-rose-200 bg-rose-950/30 border border-rose-800/40 hover:bg-rose-900/40 transition"
+                  >
+                    {isCancellingEvent ? "Cancelling..." : "Cancel Event"}
+                  </button>
+                )}
+              </div>
+            );
+          })()}
         </div>
-      </div>
+      )}
 
       {/* Key Metric Stats Cards / Error Banner */}
       {loading ? (
@@ -850,16 +968,57 @@ export default function OrganiserPage() {
               </div>
 
               <div>
-                <label className="text-slate-400 font-semibold block mb-1">Venue & Location</label>
-                <input
-                  type="text"
-                  required
-                  value={newEventVenue}
-                  onChange={(e) => setNewEventVenue(e.target.value)}
-                  placeholder="e.g. Royal Albert Hall, London"
-                  className="w-full bg-[#0B0F17] border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-violet-500 transition"
-                />
+                <label className="text-slate-400 font-semibold block mb-1">Select Venue *</label>
+                {venues.length === 0 ? (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs">
+                    No venues found. Please create a venue in the <Link href="/admin" className="underline font-bold">Admin Portal</Link> first.
+                  </div>
+                ) : (
+                  <select
+                    value={newEventVenueId}
+                    onChange={(e) => setNewEventVenueId(e.target.value)}
+                    className="w-full bg-[#0B0F17] border border-slate-700 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-violet-500 transition cursor-pointer"
+                  >
+                    {venues.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name} ({v.city}, {v.total_capacity} seats)
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
+
+              {/* Category Pricing Config */}
+              {categories.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-slate-800">
+                  <label className="text-slate-400 font-semibold block font-mono uppercase text-[10px]">
+                    Category Ticket Pricing ($ USD)
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {categories.map((c) => (
+                      <div key={c.id} className="bg-[#0B0F17] p-2 rounded-xl border border-slate-800">
+                        <span className="text-[10px] font-bold block truncate" style={{ color: c.color_code }}>
+                          {c.name}
+                        </span>
+                        <div className="flex items-center space-x-1 mt-1">
+                          <span className="text-slate-400">$</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={categoryPrices[c.id] || 0}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              setCategoryPrices((prev) => ({ ...prev, [c.id]: val }));
+                            }}
+                            className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-white font-mono font-bold text-xs"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-3 pt-2">
                 <button
