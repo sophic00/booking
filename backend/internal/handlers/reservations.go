@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -200,6 +201,12 @@ func (h *ReservationHandler) HoldSeats(w http.ResponseWriter, r *http.Request) {
 		seen[sUUID] = true
 		seatUUIDs = append(seatUUIDs, sUUID)
 	}
+
+	// Sort seat UUIDs lexicographically to enforce deterministic lock ordering
+	// across concurrent multi-seat reservation transactions, preventing deadlocks.
+	sort.Slice(seatUUIDs, func(i, j int) bool {
+		return seatUUIDs[i].String() < seatUUIDs[j].String()
+	})
 
 	// Fetch event to get configurable hold_ttl_seconds
 	event, err := h.queries.GetEventByID(r.Context(), utils.UUIDToPgtype(eventID))
