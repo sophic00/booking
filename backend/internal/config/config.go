@@ -19,6 +19,7 @@ type Config struct {
 	WaitlistOfferTTL   time.Duration
 	CORSAllowedOrigins []string
 	Environment        string
+	FrontendBaseURL    string
 
 	// Email config
 	SMTPServer   string
@@ -44,6 +45,7 @@ func Load() *Config {
 		WaitlistOfferTTL:   time.Duration(getEnvAsInt("WAITLIST_OFFER_TTL_MINUTES", 10)) * time.Minute,
 		CORSAllowedOrigins: getEnvAsSlice("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000", "http://localhost:5173", "http://localhost:8080"}, ","),
 		Environment:        getEnv("APP_ENV", "development"),
+		FrontendBaseURL:    getEnv("FRONTEND_BASE_URL", "http://localhost:3000"),
 
 		SMTPServer:   getEnv("SMTP_SERVER", "localhost"),
 		SMTPPort:     getEnvAsInt("SMTP_PORT", 1025),

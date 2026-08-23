@@ -18,6 +18,7 @@ import (
 	"ticket-booking/backend/internal/config"
 	"ticket-booking/backend/internal/db"
 	"ticket-booking/backend/internal/db/generated"
+	"ticket-booking/backend/internal/email"
 	"ticket-booking/backend/internal/handlers"
 	appmiddleware "ticket-booking/backend/internal/middleware"
 )
@@ -39,13 +40,18 @@ func main() {
 
 	// Initialize SQLC queries and HTTP handlers
 	queries := generated.New(database.Pool)
+	mailer := email.NewService(cfg)
 	authHandler := handlers.NewAuthHandler(queries, cfg)
 	venueHandler := handlers.NewVenueHandler(queries, database.Pool)
 	eventHandler := handlers.NewEventHandler(queries, database.Pool)
 	reservationHandler := handlers.NewReservationHandler(queries, database.Pool, cfg)
-	bookingHandler := handlers.NewBookingHandler(queries, database.Pool, cfg)
+	bookingHandler := handlers.NewBookingHandler(queries, database.Pool, cfg, mailer)
+	waitlistHandler := handlers.NewWaitlistHandler(queries, database.Pool, cfg, mailer)
+	waitlistAssigner := handlers.NewWaitlistAssigner(queries, database.Pool, cfg, mailer)
 
-	// Start background worker for hold TTL auto-release
+	// Start background worker:
+	//   1. expire stale waitlist offers (offering freed seats to the next in line)
+	//   2. bulk-release expired seat holds (hold TTL auto-release)
 	go func() {
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
@@ -55,6 +61,9 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				if expired := waitlistAssigner.ExpireStaleOffers(ctx); expired > 0 {
+					log.Printf("⌛ Expired %d waitlist offer(s) and reassigned seats", expired)
+				}
 				released, err := queries.BulkReleaseExpiredHolds(ctx)
 				if err != nil && !errors.Is(err, context.Canceled) {
 					log.Printf("⚠️  Hold expiration worker error: %v", err)
@@ -125,6 +134,16 @@ func main() {
 		r.Get("/events/{id}/pricing", eventHandler.GetEventPricing)
 		r.Get("/events/{id}/seats", reservationHandler.GetEventSeatMap)
 
+		// Waitlist: join for a sold-out category & accept time-limited offers
+		// (authenticated customers only)
+		r.Group(func(r chi.Router) {
+			r.Use(appmiddleware.Authenticate(cfg.JWTSecret))
+			r.Use(appmiddleware.CustomerOnly)
+
+			r.Post("/events/{id}/waitlist", waitlistHandler.JoinWaitlist)
+			r.Post("/waitlist/offers/{token}/accept", waitlistHandler.AcceptOffer)
+		})
+
 		// Protected Seat Hold & Release Endpoints
 		r.Group(func(r chi.Router) {
 			r.Use(appmiddleware.Authenticate(cfg.JWTSecret))
@@ -145,6 +164,7 @@ func main() {
 			r.Get("/bookings", bookingHandler.ListCustomerBookings)
 			r.Get("/bookings/{id}", bookingHandler.GetBooking)
 			r.Post("/bookings/{id}/cancel", bookingHandler.CancelBooking)
+			r.Get("/waitlists", waitlistHandler.ListMyWaitlist)
 		})
 
 		// Protected Admin Routes
