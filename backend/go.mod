@@ -8,12 +8,13 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/uuid v1.6.0
+	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.55.0
 )
 
-require github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa // indirect
+require github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect

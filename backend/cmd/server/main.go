@@ -41,6 +41,8 @@ func main() {
 	authHandler := handlers.NewAuthHandler(queries, cfg)
 	venueHandler := handlers.NewVenueHandler(queries, database.Pool)
 	eventHandler := handlers.NewEventHandler(queries, database.Pool)
+	reservationHandler := handlers.NewReservationHandler(queries, database.Pool, cfg)
+	bookingHandler := handlers.NewBookingHandler(queries, database.Pool, cfg)
 
 	r := chi.NewRouter()
 
@@ -96,10 +98,33 @@ func main() {
 		r.Get("/venues/{id}", venueHandler.GetVenue)
 		r.Get("/venues/{id}/seats", venueHandler.GetVenueSeats)
 
-		// Public Customer Event Discovery & Details
+		// Public Customer Event Discovery & Visual Seat Map
 		r.Get("/events", eventHandler.ListPublishedEvents)
 		r.Get("/events/{id}", eventHandler.GetPublicEvent)
 		r.Get("/events/{id}/pricing", eventHandler.GetEventPricing)
+		r.Get("/events/{id}/seats", reservationHandler.GetEventSeatMap)
+
+		// Protected Seat Hold & Release Endpoints
+		r.Group(func(r chi.Router) {
+			r.Use(appmiddleware.Authenticate(cfg.JWTSecret))
+			r.Post("/events/{id}/hold", reservationHandler.HoldSeats)
+			r.Post("/events/{id}/release", reservationHandler.ReleaseHold)
+			r.Post("/bookings/checkout", bookingHandler.Checkout)
+		})
+
+		// Protected Customer Bookings Management
+		r.Route("/customer", func(r chi.Router) {
+			r.Use(appmiddleware.Authenticate(cfg.JWTSecret))
+			r.Use(appmiddleware.CustomerOnly)
+
+			r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
+				handlers.RespondSuccess(w, http.StatusOK, map[string]string{"role": "CUSTOMER"}, "Customer access verified")
+			})
+
+			r.Get("/bookings", bookingHandler.ListCustomerBookings)
+			r.Get("/bookings/{id}", bookingHandler.GetBooking)
+			r.Post("/bookings/{id}/cancel", bookingHandler.CancelBooking)
+		})
 
 		// Protected Admin Routes
 		r.Route("/admin", func(r chi.Router) {
@@ -146,16 +171,6 @@ func main() {
 
 			// Organiser Analytics & Booking Summary
 			r.Get("/events/{id}/analytics", eventHandler.GetEventAnalytics)
-		})
-
-		// Protected Customer Routes
-		r.Route("/customer", func(r chi.Router) {
-			r.Use(appmiddleware.Authenticate(cfg.JWTSecret))
-			r.Use(appmiddleware.CustomerOnly)
-
-			r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
-				handlers.RespondSuccess(w, http.StatusOK, map[string]string{"role": "CUSTOMER"}, "Customer access verified")
-			})
 		})
 	})
 
