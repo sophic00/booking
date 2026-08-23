@@ -17,10 +17,11 @@ import {
   AlertTriangle,
   Info,
   X,
+  Sparkles,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import confetti from "canvas-confetti";
-import { fetchEventById, fetchEventSeatMap, holdSeats, releaseHold, checkoutBooking } from "../../../lib/api";
+import { fetchEventById, fetchEventSeatMap, holdSeats, releaseHold, checkoutBooking, joinWaitlist } from "../../../lib/api";
 import { EventItem, SeatMapItem, Booking, HoldSeatsResponse } from "../../../lib/types";
 import { useAuth } from "../../../context/AuthContext";
 
@@ -49,6 +50,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
   // Waitlist State
   const [waitlistJoined, setWaitlistJoined] = useState(false);
+  const [showWaitlistModal, setShowWaitlistModal] = useState(false);
+  const [selectedWaitlistCategoryId, setSelectedWaitlistCategoryId] = useState<string>("");
+  const [isJoiningWaitlist, setIsJoiningWaitlist] = useState(false);
+  const [waitlistSuccessMsg, setWaitlistSuccessMsg] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -137,6 +142,21 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const bookingFee = selectedSeats.length > 0 ? selectedSeats.length * 3.5 : 0;
   const grandTotal = subtotal + bookingFee;
   const isSoldOut = event.seats_left === 0 || event.badge?.includes("Sold Out");
+
+  const categories = React.useMemo(() => {
+    const map = new Map<string, { id: string; name: string; color: string; price: number }>();
+    for (const s of seatMap) {
+      if (s.seat_category_id && !map.has(s.seat_category_id)) {
+        map.set(s.seat_category_id, {
+          id: s.seat_category_id,
+          name: s.category_name,
+          color: s.category_color,
+          price: s.price,
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [seatMap]);
 
   const toggleSeat = (seat: SeatMapItem) => {
     if (seat.status !== "AVAILABLE" && !seat.is_my_hold) return;
@@ -448,24 +468,33 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
           {/* Sold Out & Waitlist Banner (if applicable) */}
           {isSoldOut && (
-            <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-between">
+            <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="flex items-center space-x-3">
-                <AlertTriangle className="w-5 h-5 text-rose-400" />
+                <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
                 <div>
                   <h4 className="text-xs font-bold text-rose-200">
                     This show is currently Sold Out
                   </h4>
                   <p className="text-[11px] text-slate-400">
-                    Join the automated reallocation waitlist to be notified first on cancellation.
+                    {waitlistSuccessMsg || "Join the automated reallocation waitlist to be notified first on cancellation."}
                   </p>
                 </div>
               </div>
               <button
-                onClick={() => setWaitlistJoined(true)}
+                onClick={() => {
+                  if (!user) {
+                    router.push(`/login?redirect=${encodeURIComponent(`/events/${eventId}`)}`);
+                    return;
+                  }
+                  if (categories.length > 0 && !selectedWaitlistCategoryId) {
+                    setSelectedWaitlistCategoryId(categories[0].id);
+                  }
+                  setShowWaitlistModal(true);
+                }}
                 disabled={waitlistJoined}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 transition disabled:opacity-50"
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 transition disabled:opacity-50 shrink-0"
               >
-                {waitlistJoined ? "Joined (#14 in Queue)" : "Join Waitlist"}
+                {waitlistJoined ? (waitlistSuccessMsg ? "Waitlist Active" : "Joined Waitlist") : "Join Waitlist"}
               </button>
             </div>
           )}
@@ -648,6 +677,103 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                 className="px-4 py-3 rounded-xl font-semibold text-xs text-slate-300 hover:text-white bg-slate-900 border border-slate-700 transition"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          JOIN WAITLIST MODAL DIALOG
+          ======================================================== */}
+      {showWaitlistModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-md bg-[#131A26] border border-rose-500/40 rounded-3xl shadow-2xl overflow-hidden p-6 sm:p-8 space-y-6 animate-in zoom-in-95">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Sparkles className="w-5 h-5 text-rose-400" />
+                <h3 className="text-lg font-bold text-white">Join Waitlist</h3>
+              </div>
+              <button
+                onClick={() => setShowWaitlistModal(false)}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-300">
+              Select your desired seating category. When a customer cancels, seats are offered strictly first-come, first-served to waitlisted fans.
+            </p>
+
+            <div className="space-y-3">
+              <label className="text-xs font-semibold text-slate-400 uppercase font-mono">
+                Seat Category
+              </label>
+              <div className="space-y-2">
+                {categories.map((cat) => (
+                  <label
+                    key={cat.id}
+                    className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${
+                      selectedWaitlistCategoryId === cat.id
+                        ? "bg-rose-950/40 border-rose-500 text-white"
+                        : "bg-slate-900/60 border-slate-800 text-slate-300 hover:border-slate-700"
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="radio"
+                        name="waitlistCategory"
+                        value={cat.id}
+                        checked={selectedWaitlistCategoryId === cat.id}
+                        onChange={() => setSelectedWaitlistCategoryId(cat.id)}
+                        className="accent-rose-500"
+                      />
+                      <div>
+                        <span className="text-xs font-bold block">{cat.name}</span>
+                        <span className="text-[11px] text-slate-400 font-mono">${cat.price.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <span
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: cat.color || "#6366f1" }}
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={async () => {
+                  if (!selectedWaitlistCategoryId) {
+                    setActionError("Please select a seat category to join the waitlist.");
+                    return;
+                  }
+                  setIsJoiningWaitlist(true);
+                  setActionError(null);
+                  try {
+                    const entry = await joinWaitlist(eventId, selectedWaitlistCategoryId);
+                    const catName = categories.find((c) => c.id === selectedWaitlistCategoryId)?.name || "selected tier";
+                    setWaitlistSuccessMsg(`Position #${entry.queue_position} for ${catName}`);
+                    setWaitlistJoined(true);
+                    setShowWaitlistModal(false);
+                  } catch (err: any) {
+                    setActionError(err.message || "Failed to join waitlist");
+                  } finally {
+                    setIsJoiningWaitlist(false);
+                  }
+                }}
+                disabled={!selectedWaitlistCategoryId || isJoiningWaitlist}
+                className="flex-1 py-3 rounded-xl font-bold text-xs text-white bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 transition disabled:opacity-50 flex items-center justify-center"
+              >
+                {isJoiningWaitlist ? <RefreshCw className="w-4 h-4 animate-spin" /> : "Confirm & Join Waitlist"}
+              </button>
+              <button
+                onClick={() => setShowWaitlistModal(false)}
+                className="px-4 py-3 rounded-xl font-semibold text-xs text-slate-300 hover:text-white bg-slate-900 border border-slate-700 transition"
+              >
+                Cancel
               </button>
             </div>
           </div>
