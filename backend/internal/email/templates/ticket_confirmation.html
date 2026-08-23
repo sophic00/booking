@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<body style="font-family:Arial,sans-serif;color:#1e293b">
+  <h2 style="color:#7c3aed">Your tickets are confirmed</h2>
+  <p>Hi {{.CustomerName}},</p>
+  <p><strong>Booking Reference:</strong> {{.BookingRef}}<br/>
+     <strong>Event:</strong> {{.EventTitle}}<br/>
+     <strong>Venue:</strong> {{.VenueName}}, {{.VenueCity}}</p>
+  <p>Your QR code ticket is embedded below: present it at the venue for entry.</p>
+  <p><img src="cid:{{.QRAttachmentName}}" alt="QR Ticket" width="200" height="200"/></p>
+  <p style="color:#64748b;font-size:12px">Total paid: {{printf "%.2f" .TotalAmount}} {{.Currency}}</p>
+</body>
+</html>

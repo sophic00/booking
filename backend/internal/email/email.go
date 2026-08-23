@@ -8,8 +8,10 @@ package email
 import (
 	"bytes"
 	"crypto/rand"
+	"embed"
 	"encoding/base64"
 	"fmt"
+	"html/template"
 	"log"
 	"mime"
 	"net/smtp"
@@ -71,6 +73,37 @@ func (s *Service) IsMock() bool {
 	return s.cfg == nil || s.cfg.EmailMock
 }
 
+//go:embed templates/*.html
+var templatesFS embed.FS
+
+var (
+	emailFuncMap = template.FuncMap{
+		"formatRFC1123": func(v any) string {
+			switch t := v.(type) {
+			case time.Time:
+				return t.Format(time.RFC1123)
+			case *time.Time:
+				if t != nil {
+					return t.Format(time.RFC1123)
+				}
+			}
+			return ""
+		},
+	}
+
+	ticketConfirmationTmpl = template.Must(
+		template.New("ticket_confirmation.html").
+			Funcs(emailFuncMap).
+			ParseFS(templatesFS, "templates/ticket_confirmation.html"),
+	)
+
+	waitlistOfferTmpl = template.Must(
+		template.New("waitlist_offer.html").
+			Funcs(emailFuncMap).
+			ParseFS(templatesFS, "templates/waitlist_offer.html"),
+	)
+)
+
 // SendTicketConfirmation delivers the booking confirmation with the QR code ticket attached inline.
 func (s *Service) SendTicketConfirmation(to string, info TicketConfirmation) error {
 	if s.IsMock() {
@@ -97,20 +130,11 @@ func (s *Service) SendTicketConfirmation(to string, info TicketConfirmation) err
 	sb.WriteString("\nYour QR code ticket is attached to this email. Present it at the venue for entry.\n")
 	textBody := sb.String()
 
-	htmlBody := fmt.Sprintf(`
-<html><body style="font-family:Arial,sans-serif;color:#1e293b">
-  <h2 style="color:#7c3aed">Your tickets are confirmed</h2>
-  <p>Hi %s,</p>
-  <p><strong>Booking Reference:</strong> %s<br/>
-     <strong>Event:</strong> %s<br/>
-     <strong>Venue:</strong> %s, %s</p>
-  <p>Your QR code ticket is embedded below — present it at the venue for entry.</p>
-  <p><img src="cid:%s" alt="QR Ticket" width="200" height="200"/></p>
-  <p style="color:#64748b;font-size:12px">Total paid: %.2f %s</p>
-</body></html>`,
-		info.CustomerName, info.BookingRef, info.EventTitle,
-		info.VenueName, info.VenueCity,
-		info.QRAttachmentName, info.TotalAmount, info.Currency)
+	var htmlBuf bytes.Buffer
+	if err := ticketConfirmationTmpl.Execute(&htmlBuf, info); err != nil {
+		return fmt.Errorf("failed to render ticket confirmation html: %w", err)
+	}
+	htmlBody := htmlBuf.String()
 
 	var attachments []attachment
 	if len(info.QRPNG) > 0 {
@@ -139,7 +163,7 @@ func (s *Service) SendWaitlistOffer(to string, info WaitlistOfferNotification) e
 		return nil
 	}
 
-	subject := fmt.Sprintf("A seat opened up for %s — offer expires %s",
+	subject := fmt.Sprintf("A seat opened up for %s: offer expires %s",
 		info.EventTitle, info.ExpiresAt.Format("3:04 PM MST"))
 
 	var sb strings.Builder
@@ -152,16 +176,11 @@ func (s *Service) SendWaitlistOffer(to string, info WaitlistOfferNotification) e
 	sb.WriteString("If you do not complete the booking in time, the seat will be offered to the next person in line.\n")
 	textBody := sb.String()
 
-	htmlBody := fmt.Sprintf(`
-<html><body style="font-family:Arial,sans-serif;color:#1e293b">
-  <h2 style="color:#059669">A seat opened up!</h2>
-  <p>Hi %s,</p>
-  <p>A <strong>%s</strong> seat for <strong>%s</strong> (Row %s, Seat %s) is available at %.2f %s.</p>
-  <p><a href="%s" style="background:#7c3aed;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none">Complete your booking</a></p>
-  <p style="color:#dc2626"><strong>Offer expires %s.</strong> After that the seat goes to the next customer in line.</p>
-</body></html>`,
-		info.CustomerName, info.CategoryName, info.EventTitle, info.RowLabel, info.SeatNumber,
-		info.Price, info.Currency, info.OfferURL, info.ExpiresAt.Format(time.RFC1123))
+	var htmlBuf bytes.Buffer
+	if err := waitlistOfferTmpl.Execute(&htmlBuf, info); err != nil {
+		return fmt.Errorf("failed to render waitlist offer html: %w", err)
+	}
+	htmlBody := htmlBuf.String()
 
 	msg, err := buildMultipartMessage(s.cfg.SMTPFrom, to, subject, textBody, htmlBody, nil)
 	if err != nil {
