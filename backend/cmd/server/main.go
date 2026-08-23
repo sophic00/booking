@@ -40,6 +40,7 @@ func main() {
 	queries := generated.New(database.Pool)
 	authHandler := handlers.NewAuthHandler(queries, cfg)
 	venueHandler := handlers.NewVenueHandler(queries, database.Pool)
+	eventHandler := handlers.NewEventHandler(queries, database.Pool)
 
 	r := chi.NewRouter()
 
@@ -95,6 +96,11 @@ func main() {
 		r.Get("/venues/{id}", venueHandler.GetVenue)
 		r.Get("/venues/{id}/seats", venueHandler.GetVenueSeats)
 
+		// Public Customer Event Discovery & Details
+		r.Get("/events", eventHandler.ListPublishedEvents)
+		r.Get("/events/{id}", eventHandler.GetPublicEvent)
+		r.Get("/events/{id}/pricing", eventHandler.GetEventPricing)
+
 		// Protected Admin Routes
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(appmiddleware.Authenticate(cfg.JWTSecret))
@@ -121,11 +127,25 @@ func main() {
 		// Protected Organiser Routes
 		r.Route("/organiser", func(r chi.Router) {
 			r.Use(appmiddleware.Authenticate(cfg.JWTSecret))
-			r.Use(appmiddleware.OrganiserOnly)
+			r.Use(appmiddleware.OrganiserOrAdmin)
 
 			r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
 				handlers.RespondSuccess(w, http.StatusOK, map[string]string{"role": "ORGANISER"}, "Organiser access verified")
 			})
+
+			// Organiser Event Management
+			r.Post("/events", eventHandler.CreateEvent)
+			r.Get("/events", eventHandler.ListOrganiserEvents)
+			r.Get("/events/{id}", eventHandler.GetOrganiserEvent)
+			r.Put("/events/{id}", eventHandler.UpdateEvent)
+			r.Post("/events/{id}/publish", eventHandler.PublishEvent)
+			r.Post("/events/{id}/cancel", eventHandler.CancelEvent)
+
+			// Per-Category Pricing Configuration
+			r.Post("/events/{id}/pricing", eventHandler.SetEventPricing)
+
+			// Organiser Analytics & Booking Summary
+			r.Get("/events/{id}/analytics", eventHandler.GetEventAnalytics)
 		})
 
 		// Protected Customer Routes
