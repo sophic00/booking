@@ -267,6 +267,7 @@ func (h *WaitlistHandler) AcceptOffer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var booking generated.Booking
+	var tickets []TicketDetailResponse
 	if h.pool != nil {
 		tx, txErr := h.pool.Begin(r.Context())
 		if txErr != nil {
@@ -275,21 +276,20 @@ func (h *WaitlistHandler) AcceptOffer(w http.ResponseWriter, r *http.Request) {
 		}
 		defer tx.Rollback(r.Context())
 
-		booking, err = confirmOfferTx(r.Context(), generated.New(tx), offer, heldSeats, customerID, totalAmount, currency)
+		booking, tickets, err = confirmOfferTx(r.Context(), generated.New(tx), offer, heldSeats, customerID, totalAmount, currency)
 		if err == nil {
 			err = tx.Commit(r.Context())
 		}
 	} else {
 		// Non-pool execution for mock tests.
-		booking, err = confirmOfferTx(r.Context(), h.queries, offer, heldSeats, customerID, totalAmount, currency)
+		booking, tickets, err = confirmOfferTx(r.Context(), h.queries, offer, heldSeats, customerID, totalAmount, currency)
 	}
 	if err != nil {
 		respondWaitlistConfirmError(w, err)
 		return
 	}
 
-	tickets := buildTicketDetails(heldSeats, booking.BookingReference, booking.ID)
-	h.sendOfferConfirmationEmail(booking.BookingReference, offer, heldSeats, totalAmount, currency)
+	h.sendOfferConfirmationEmail(booking.BookingReference, offer, tickets, totalAmount, currency)
 
 	RespondSuccess(w, http.StatusCreated, BookingResponse{
 		ID:               utils.PgtypeToUUID(booking.ID).String(),
@@ -348,7 +348,7 @@ func confirmOfferTx(
 	customerID uuid.UUID,
 	totalAmount float64,
 	currency string,
-) (generated.Booking, error) {
+) (generated.Booking, []TicketDetailResponse, error) {
 	eventPgUUID := offer.EventID
 	holdTokenPgUUID := offer.OfferToken
 
@@ -360,61 +360,31 @@ func confirmOfferTx(
 		Currency:         currency,
 	})
 	if err != nil {
-		return generated.Booking{}, wrapConfirmErr(errKindDB, err)
+		return generated.Booking{}, nil, wrapConfirmErr(errKindDB, err)
 	}
 
+	tickets := make([]TicketDetailResponse, 0, len(heldSeats))
 	for _, hs := range heldSeats {
 		ticketUUID := uuid.New()
+		seatIDStr := utils.PgtypeToUUID(hs.SeatID).String()
 		qrPayload := qrcode.GenerateTicketPayload(booking.BookingReference,
-			utils.PgtypeToUUID(hs.SeatID).String(), ticketUUID.String())
-		if _, err := q.CreateTicket(ctx, generated.CreateTicketParams{
+			seatIDStr, ticketUUID.String())
+		tRecord, err := q.CreateTicket(ctx, generated.CreateTicketParams{
 			BookingID:     booking.ID,
 			EventID:       eventPgUUID,
 			SeatID:        hs.SeatID,
 			UnitPrice:     hs.Price,
 			QrCodePayload: qrPayload,
-		}); err != nil {
-			return generated.Booking{}, wrapConfirmErr(errKindDB, err)
+		})
+		if err != nil {
+			return generated.Booking{}, nil, wrapConfirmErr(errKindDB, err)
 		}
-	}
 
-	confirmedRows, err := q.ConfirmReservationToBooked(ctx, generated.ConfirmReservationToBookedParams{
-		EventID:   eventPgUUID,
-		HoldToken: holdTokenPgUUID,
-		BookingID: booking.ID,
-	})
-	if err != nil {
-		return generated.Booking{}, wrapConfirmErr(errKindDB, err)
-	}
-	if confirmedRows != int64(len(heldSeats)) {
-		// The offer expired concurrently and its reservation was released.
-		return generated.Booking{}, wrapConfirmErr(errKindExpired, errors.New("reservation no longer active"))
-	}
-
-	if _, err := q.UpdateWaitlistEntryStatus(ctx, generated.UpdateWaitlistEntryStatusParams{
-		ID:     offer.WaitlistEntryID,
-		Status: generated.WaitlistStatusACCEPTED,
-	}); err != nil {
-		return generated.Booking{}, wrapConfirmErr(errKindDB, err)
-	}
-
-	if _, err := q.AcceptWaitlistOffer(ctx, offer.ID); err != nil {
-		return generated.Booking{}, wrapConfirmErr(errKindDB, err)
-	}
-	return booking, nil
-}
-
-// buildTicketDetails assembles ticket DTOs with QR data URLs for API responses.
-func buildTicketDetails(heldSeats []generated.GetActiveHoldOrOfferByTokenRow, bookingRef string, bookingID pgtype.UUID) []TicketDetailResponse {
-	tickets := make([]TicketDetailResponse, 0, len(heldSeats))
-	for _, hs := range heldSeats {
-		ticketUUID := uuid.New()
-		qrPayload := qrcode.GenerateTicketPayload(bookingRef, utils.PgtypeToUUID(hs.SeatID).String(), ticketUUID.String())
 		qrDataURL, _ := qrcode.GenerateDataURL(qrPayload, 200)
 		tickets = append(tickets, TicketDetailResponse{
-			ID:             ticketUUID.String(),
-			BookingID:      utils.PgtypeToUUID(bookingID).String(),
-			SeatID:         utils.PgtypeToUUID(hs.SeatID).String(),
+			ID:             utils.PgtypeToUUID(tRecord.ID).String(),
+			BookingID:      utils.PgtypeToUUID(booking.ID).String(),
+			SeatID:         seatIDStr,
 			RowLabel:       hs.RowLabel,
 			SeatNumber:     hs.SeatNumber,
 			SeatCategoryID: utils.PgtypeToUUID(hs.SeatCategoryID).String(),
@@ -423,31 +393,54 @@ func buildTicketDetails(heldSeats []generated.GetActiveHoldOrOfferByTokenRow, bo
 			UnitPrice:      utils.PgtypeNumericToFloat64(hs.Price),
 			QRCodePayload:  qrPayload,
 			QRCodeDataURL:  qrDataURL,
-			Status:         "VALID",
+			Status:         string(tRecord.Status),
 		})
 	}
-	return tickets
+
+	confirmedRows, err := q.ConfirmReservationToBooked(ctx, generated.ConfirmReservationToBookedParams{
+		EventID:   eventPgUUID,
+		HoldToken: holdTokenPgUUID,
+		BookingID: booking.ID,
+	})
+	if err != nil {
+		return generated.Booking{}, nil, wrapConfirmErr(errKindDB, err)
+	}
+	if confirmedRows != int64(len(heldSeats)) {
+		// The offer expired concurrently and its reservation was released.
+		return generated.Booking{}, nil, wrapConfirmErr(errKindExpired, errors.New("reservation no longer active"))
+	}
+
+	if _, err := q.UpdateWaitlistEntryStatus(ctx, generated.UpdateWaitlistEntryStatusParams{
+		ID:     offer.WaitlistEntryID,
+		Status: generated.WaitlistStatusACCEPTED,
+	}); err != nil {
+		return generated.Booking{}, nil, wrapConfirmErr(errKindDB, err)
+	}
+
+	if _, err := q.AcceptWaitlistOffer(ctx, offer.ID); err != nil {
+		return generated.Booking{}, nil, wrapConfirmErr(errKindDB, err)
+	}
+	return booking, tickets, nil
 }
 
 // sendOfferConfirmationEmail best-effort sends the ticket confirmation email for an accepted offer.
-func (h *WaitlistHandler) sendOfferConfirmationEmail(bookingRef string, offer generated.GetWaitlistOfferByTokenRow, heldSeats []generated.GetActiveHoldOrOfferByTokenRow, totalAmount float64, currency string) {
-	if h.mailer == nil || len(heldSeats) == 0 {
+func (h *WaitlistHandler) sendOfferConfirmationEmail(bookingRef string, offer generated.GetWaitlistOfferByTokenRow, tickets []TicketDetailResponse, totalAmount float64, currency string) {
+	if h.mailer == nil || len(tickets) == 0 {
 		return
 	}
-	seats := make([]email.SeatInfo, 0, len(heldSeats))
+	seats := make([]email.SeatInfo, 0, len(tickets))
 	var firstQR []byte
 	qrName := "ticket.png"
-	for i, hs := range heldSeats {
+	for i, t := range tickets {
 		seats = append(seats, email.SeatInfo{
-			RowLabel:     hs.RowLabel,
-			SeatNumber:   hs.SeatNumber,
-			CategoryName: hs.CategoryName,
-			UnitPrice:    utils.PgtypeNumericToFloat64(hs.Price),
+			RowLabel:     t.RowLabel,
+			SeatNumber:   t.SeatNumber,
+			CategoryName: t.CategoryName,
+			UnitPrice:    t.UnitPrice,
 		})
-		payload := qrcode.GenerateTicketPayload(bookingRef, utils.PgtypeToUUID(hs.SeatID).String(), bookingRef)
-		if png, err := qrcode.GeneratePNG(payload, 300); err == nil && i == 0 {
+		if png, err := qrcode.GeneratePNG(t.QRCodePayload, 300); err == nil && i == 0 {
 			firstQR = png
-			qrName = fmt.Sprintf("ticket-%s%s.png", hs.RowLabel, hs.SeatNumber)
+			qrName = fmt.Sprintf("ticket-%s%s.png", t.RowLabel, t.SeatNumber)
 		}
 	}
 
