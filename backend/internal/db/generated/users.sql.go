@@ -11,6 +11,48 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createUser = `-- name: CreateUser :one
+INSERT INTO users (
+    email,
+    password_hash,
+    full_name,
+    phone,
+    role
+) VALUES (
+    $1, $2, $3, $4, $5
+) RETURNING id, email, password_hash, full_name, phone, role, created_at, updated_at
+`
+
+type CreateUserParams struct {
+	Email        string      `json:"email"`
+	PasswordHash string      `json:"password_hash"`
+	FullName     string      `json:"full_name"`
+	Phone        pgtype.Text `json:"phone"`
+	Role         UserRole    `json:"role"`
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, createUser,
+		arg.Email,
+		arg.PasswordHash,
+		arg.FullName,
+		arg.Phone,
+		arg.Role,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.FullName,
+		&i.Phone,
+		&i.Role,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, email, password_hash, full_name, phone, role, created_at, updated_at FROM users
 WHERE email = $1 LIMIT 1
@@ -39,6 +81,37 @@ WHERE id = $1 LIMIT 1
 
 func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.FullName,
+		&i.Phone,
+		&i.Role,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateUserProfile = `-- name: UpdateUserProfile :one
+UPDATE users
+SET full_name = $2,
+    phone = $3,
+    updated_at = NOW()
+WHERE id = $1
+RETURNING id, email, password_hash, full_name, phone, role, created_at, updated_at
+`
+
+type UpdateUserProfileParams struct {
+	ID       pgtype.UUID `json:"id"`
+	FullName string      `json:"full_name"`
+	Phone    pgtype.Text `json:"phone"`
+}
+
+func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserProfile, arg.ID, arg.FullName, arg.Phone)
 	var i User
 	err := row.Scan(
 		&i.ID,
