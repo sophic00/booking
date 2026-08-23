@@ -9,11 +9,12 @@ import { FeatureHighlights } from "../components/home/FeatureHighlights";
 import { OrganiserCallout } from "../components/home/OrganiserCallout";
 import { fetchEvents } from "../lib/api";
 import { EventItem } from "../lib/types";
-import { Flame, Ticket, Search, RefreshCw } from "lucide-react";
+import { Flame, Ticket, Search, RefreshCw, AlertCircle } from "lucide-react";
 
 export default function HomePage() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("ALL");
   const [searchKeyword, setSearchKeyword] = useState("");
   const [quickFilters, setQuickFilters] = useState<{
@@ -26,14 +27,22 @@ export default function HomePage() {
     priceRange: "ALL",
   });
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
       const data = await fetchEvents();
       setEvents(data);
+    } catch (err: any) {
+      setError(err.message || "Failed to connect to backend API server");
+      setEvents([]);
+    } finally {
       setLoading(false);
     }
-    load();
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   const filteredEvents = useMemo(() => {
@@ -79,7 +88,12 @@ export default function HomePage() {
     <div className="space-y-12 pb-16">
       {/* 1. Cinematic Hero Spotlight Carousel */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-        <HeroCarousel />
+        <HeroCarousel
+          events={events}
+          loading={loading}
+          error={error}
+          onRetry={loadData}
+        />
       </section>
 
       {/* 2. Floating Quick Booking Search Bar */}
@@ -136,28 +150,50 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Grid of Event Cards */}
+        {/* Grid of Event Cards / Error Banner */}
         {loading ? (
           <div className="py-20 text-center text-slate-400">
             <RefreshCw className="w-8 h-8 mx-auto animate-spin text-indigo-400 mb-3" />
-            <p className="font-semibold text-slate-300">Loading live shows & seat statuses...</p>
+            <p className="font-semibold text-slate-300">Loading live shows & seat statuses from backend...</p>
+          </div>
+        ) : error ? (
+          <div className="py-16 text-center glass-panel rounded-3xl border border-rose-500/40 p-8 space-y-4 bg-gradient-to-b from-rose-950/20 to-[#131A26]">
+            <AlertCircle className="w-12 h-12 mx-auto text-rose-400" />
+            <h3 className="text-lg font-bold text-rose-200">Failed to Load Events from Backend</h3>
+            <p className="text-xs text-slate-300 max-w-md mx-auto font-mono bg-black/40 p-3 rounded-xl border border-rose-500/20 text-rose-300">
+              {error}
+            </p>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">
+              Please ensure the Go backend service is running on <code className="text-indigo-400">localhost:8080</code> with PostgreSQL connected.
+            </p>
+            <button
+              onClick={loadData}
+              className="mt-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 transition shadow-lg shadow-rose-600/30"
+            >
+              Retry Loading Events
+            </button>
           </div>
         ) : filteredEvents.length === 0 ? (
           <div className="py-20 text-center glass-panel rounded-3xl border border-slate-800 p-8 space-y-3">
             <Ticket className="w-12 h-12 mx-auto text-slate-600" />
             <h3 className="text-lg font-bold text-slate-200">No events matched your filter criteria</h3>
             <p className="text-xs text-slate-400 max-w-md mx-auto">
-              Try adjusting your category pills or price range to explore more available cinema and stadium performances.
+              {events.length === 0
+                ? "No published events are currently registered in the database."
+                : "Try adjusting your category pills or search terms."}
             </p>
-            <button
-              onClick={() => {
-                setActiveTab("ALL");
-                setQuickFilters({ eventType: "ALL", city: "ALL", priceRange: "ALL" });
-              }}
-              className="mt-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition"
-            >
-              Show All Events
-            </button>
+            {events.length > 0 && (
+              <button
+                onClick={() => {
+                  setActiveTab("ALL");
+                  setQuickFilters({ eventType: "ALL", city: "ALL", priceRange: "ALL" });
+                  setSearchKeyword("");
+                }}
+                className="mt-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition"
+              >
+                Show All Events
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

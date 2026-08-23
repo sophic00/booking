@@ -13,26 +13,45 @@ import {
   Clock,
   ArrowRight,
   ShieldCheck,
+  AlertCircle,
+  Lock,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { fetchCustomerBookings, cancelBooking } from "../../lib/api";
 import { Booking } from "../../lib/types";
+import { useAuth } from "../../context/AuthContext";
 
 export default function MyBookingsPage() {
+  const { user, isLoading: authLoading } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedBookingForQR, setSelectedBookingForQR] = useState<Booking | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
+  const loadBookings = async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
       const data = await fetchCustomerBookings();
       setBookings(data);
+    } catch (err: any) {
+      setError(err.message || "Failed to load bookings from backend API");
+      setBookings([]);
+    } finally {
       setLoading(false);
     }
-    load();
-  }, []);
+  };
+
+  useEffect(() => {
+    if (!authLoading) {
+      loadBookings();
+    }
+  }, [user, authLoading]);
 
   const handleCancelBooking = async (booking: Booking) => {
     const confirmCancel = window.confirm(
@@ -53,12 +72,46 @@ export default function MyBookingsPage() {
         );
         alert(`✅ Booking ${booking.booking_reference} has been cancelled successfully.`);
       }
-    } catch {
-      alert("Failed to cancel booking.");
+    } catch (err: any) {
+      alert(`Failed to cancel booking: ${err.message || "Unknown error"}`);
     } finally {
       setCancellingId(null);
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className="py-24 text-center text-slate-400">
+        <RefreshCw className="w-8 h-8 mx-auto animate-spin text-indigo-400 mb-3" />
+        <p className="font-semibold text-slate-300">Checking authentication...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-24 text-center space-y-6">
+        <div className="glass-panel rounded-3xl border border-slate-800 p-8 sm:p-12 space-y-4 bg-[#131A26]">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto">
+            <Lock className="w-6 h-6" />
+          </div>
+          <h2 className="text-xl font-bold text-white">Sign In Required</h2>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            Please sign in with your customer account to view your confirmed tickets, mobile passes, and reservation history.
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/login"
+              className="inline-flex items-center px-5 py-2.5 rounded-xl font-bold text-xs text-white bg-indigo-600 hover:bg-indigo-500 transition shadow-lg shadow-indigo-600/30"
+            >
+              Sign In to Your Account
+              <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
@@ -86,11 +139,25 @@ export default function MyBookingsPage() {
         </Link>
       </div>
 
-      {/* Bookings List */}
+      {/* Bookings List / Error Banner */}
       {loading ? (
         <div className="py-20 text-center text-slate-400">
           <RefreshCw className="w-8 h-8 mx-auto animate-spin text-indigo-400 mb-3" />
-          <p className="font-semibold text-slate-300">Loading your tickets & mobile passes...</p>
+          <p className="font-semibold text-slate-300">Loading your tickets & mobile passes from backend...</p>
+        </div>
+      ) : error ? (
+        <div className="py-16 text-center glass-panel rounded-3xl border border-rose-500/40 p-8 space-y-4 bg-gradient-to-b from-rose-950/20 to-[#131A26]">
+          <AlertCircle className="w-12 h-12 mx-auto text-rose-400" />
+          <h3 className="text-lg font-bold text-rose-200">Failed to Load Your Bookings</h3>
+          <p className="text-xs text-slate-300 max-w-md mx-auto font-mono bg-black/40 p-3 rounded-xl border border-rose-500/20 text-rose-300">
+            {error}
+          </p>
+          <button
+            onClick={loadBookings}
+            className="mt-2 px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 transition shadow-lg shadow-rose-600/30"
+          >
+            Retry Loading Bookings
+          </button>
         </div>
       ) : bookings.length === 0 ? (
         <div className="py-20 text-center glass-panel rounded-3xl border border-slate-800 p-8 space-y-4">
@@ -145,7 +212,7 @@ export default function MyBookingsPage() {
                     </div>
 
                     <h3 className="text-xl font-black text-white mt-1">
-                      {booking.event_title || "VelvetSeats Special Show"}
+                      {booking.event_title || "VelvetSeats Event"}
                     </h3>
                   </div>
 
@@ -172,7 +239,7 @@ export default function MyBookingsPage() {
                               day: "numeric",
                               year: "numeric",
                             })
-                          : "Sep 26, 2026"}
+                          : "Scheduled"}
                       </span>
                     </div>
                   </div>
@@ -187,7 +254,7 @@ export default function MyBookingsPage() {
                               hour: "numeric",
                               minute: "2-digit",
                             })
-                          : "7:00 PM"}
+                          : "TBA"}
                       </span>
                     </div>
                   </div>
@@ -197,7 +264,7 @@ export default function MyBookingsPage() {
                     <div>
                       <span className="text-[10px] text-slate-500 block">VENUE</span>
                       <span className="font-semibold text-slate-200">
-                        {booking.venue_name || "Royal Albert Hall"}, {booking.venue_city || "London"}
+                        {booking.venue_name || "Venue"}, {booking.venue_city || ""}
                       </span>
                     </div>
                   </div>
@@ -206,14 +273,11 @@ export default function MyBookingsPage() {
                 {/* Ticket Details & Seats */}
                 <div className="space-y-3">
                   <span className="text-xs font-semibold text-slate-400 uppercase font-mono tracking-wider block">
-                    Reserved Seats ({booking.ticket_count || booking.tickets?.length || 2} Passes)
+                    Reserved Seats ({booking.ticket_count || booking.tickets?.length || 0} Passes)
                   </span>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    {(booking.tickets || [
-                      { id: "1", row_label: "A", seat_number: "14", category_name: "VIP Diamond", unit_price: 240, qr_code_payload: "TB:MOCK" },
-                      { id: "2", row_label: "A", seat_number: "15", category_name: "VIP Diamond", unit_price: 240, qr_code_payload: "TB:MOCK" },
-                    ]).map((ticket: any) => (
+                    {(booking.tickets || []).map((ticket) => (
                       <div
                         key={ticket.id}
                         className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs"

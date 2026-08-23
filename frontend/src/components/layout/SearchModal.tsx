@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Search, X, Calendar, MapPin, Tag, ArrowRight, Ticket } from "lucide-react";
+import { Search, X, Calendar, MapPin, ArrowRight, Ticket, RefreshCw, AlertCircle } from "lucide-react";
 import { EventItem } from "../../lib/types";
-import { MOCK_EVENTS } from "../../data/mockData";
+import { fetchEvents } from "../../lib/api";
 import Link from "next/link";
 
 interface SearchModalProps {
@@ -13,13 +13,19 @@ interface SearchModalProps {
 
 export function SearchModal({ isOpen, onClose }: SearchModalProps) {
   const [query, setQuery] = useState("");
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 50);
+      searchEvents("");
     } else {
       setQuery("");
+      setEvents([]);
+      setError(null);
     }
   }, [isOpen]);
 
@@ -37,17 +43,26 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  const searchEvents = async (searchQuery: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchEvents({ search: searchQuery.trim() || undefined, limit: 10 });
+      setEvents(data);
+    } catch (err: any) {
+      setError(err.message || "Failed to search events from backend API");
+      setEvents([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const filtered = MOCK_EVENTS.filter((e) => {
-    const q = query.toLowerCase();
-    return (
-      e.title.toLowerCase().includes(q) ||
-      e.venue_name?.toLowerCase().includes(q) ||
-      e.venue_city?.toLowerCase().includes(q) ||
-      e.event_type.toLowerCase().includes(q)
-    );
-  });
+  const handleQueryChange = (val: string) => {
+    setQuery(val);
+    searchEvents(val);
+  };
+
+  if (!isOpen) return null;
 
   return (
     <div
@@ -65,13 +80,13 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
             ref={inputRef}
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => handleQueryChange(e.target.value)}
             placeholder="Search movies, concerts, artists, venues..."
             className="w-full bg-transparent text-slate-100 placeholder-slate-400 text-base focus:outline-none"
           />
           {query && (
             <button
-              onClick={() => setQuery("")}
+              onClick={() => handleQueryChange("")}
               className="text-slate-400 hover:text-slate-200 p-1 mr-1 text-xs"
             >
               Clear
@@ -88,10 +103,10 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
         {/* Quick Filter Tags */}
         <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-900/50 border-b border-slate-800/80 text-xs text-slate-400 overflow-x-auto">
           <span className="shrink-0 text-slate-500 font-medium">Quick Filters:</span>
-          {["All", "Movies", "Concerts", "IMAX 70mm", "San Francisco", "London"].map((tag) => (
+          {["All", "Concert", "Movie", "Theatre", "Sports"].map((tag) => (
             <button
               key={tag}
-              onClick={() => setQuery(tag === "All" ? "" : tag)}
+              onClick={() => handleQueryChange(tag === "All" ? "" : tag)}
               className="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 transition shrink-0"
             >
               {tag}
@@ -101,14 +116,32 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
 
         {/* Results List */}
         <div className="max-h-96 overflow-y-auto p-3 space-y-2">
-          {filtered.length === 0 ? (
+          {loading ? (
+            <div className="py-12 text-center text-slate-400">
+              <RefreshCw className="w-8 h-8 mx-auto mb-3 animate-spin text-indigo-400" />
+              <p className="text-xs font-semibold text-slate-300">Searching live events...</p>
+            </div>
+          ) : error ? (
+            <div className="p-6 text-center text-rose-300 space-y-2">
+              <AlertCircle className="w-8 h-8 mx-auto text-rose-400 mb-1" />
+              <p className="text-xs font-semibold">{error}</p>
+              <button
+                onClick={() => searchEvents(query)}
+                className="px-3 py-1.5 rounded-lg text-xs bg-rose-600 hover:bg-rose-500 text-white font-bold transition"
+              >
+                Retry
+              </button>
+            </div>
+          ) : events.length === 0 ? (
             <div className="py-12 text-center text-slate-400">
               <Ticket className="w-10 h-10 mx-auto mb-3 text-slate-600" />
               <p className="font-medium text-slate-300">No events found</p>
-              <p className="text-xs text-slate-500 mt-1">Try searching for &quot;Dune&quot;, &quot;Hans Zimmer&quot;, or &quot;Concert&quot;</p>
+              <p className="text-xs text-slate-500 mt-1">
+                {query ? `No events matched "${query}" on the backend` : "No published events available right now"}
+              </p>
             </div>
           ) : (
-            filtered.map((event) => (
+            events.map((event) => (
               <Link
                 key={event.id}
                 href={`/events/${event.id}`}
@@ -117,16 +150,22 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
               >
                 <div className="flex items-center space-x-3.5">
                   <div className="w-12 h-14 rounded-lg bg-slate-800 overflow-hidden shrink-0 border border-slate-700">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={event.poster_url || ""}
-                      alt={event.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition"
-                    />
+                    {event.poster_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={event.poster_url}
+                        alt={event.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-slate-800 text-slate-500 text-[10px]">
+                        Event
+                      </div>
+                    )}
                   </div>
                   <div>
                     <div className="flex items-center space-x-2">
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase">
                         {event.event_type}
                       </span>
                       <h4 className="text-sm font-semibold text-slate-100 group-hover:text-indigo-300 transition">
@@ -134,10 +173,12 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                       </h4>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
-                      <span className="flex items-center">
-                        <MapPin className="w-3 h-3 mr-1 text-slate-500" />
-                        {event.venue_name}
-                      </span>
+                      {event.venue_name && (
+                        <span className="flex items-center">
+                          <MapPin className="w-3 h-3 mr-1 text-slate-500" />
+                          {event.venue_name}
+                        </span>
+                      )}
                       <span className="flex items-center">
                         <Calendar className="w-3 h-3 mr-1 text-slate-500" />
                         {new Date(event.start_time).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
@@ -147,10 +188,6 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                 </div>
 
                 <div className="flex items-center space-x-3">
-                  <div className="text-right">
-                    <span className="text-xs text-slate-400 block">From</span>
-                    <span className="text-sm font-bold text-slate-100">${event.min_price}</span>
-                  </div>
                   <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-indigo-400 group-hover:translate-x-1 transition" />
                 </div>
               </Link>
@@ -160,7 +197,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
 
         {/* Footer Hint */}
         <div className="px-4 py-2.5 bg-[#0B0F17] border-t border-slate-800 text-[11px] text-slate-500 flex justify-between items-center">
-          <span>Navigate with <b>↑</b> <b>↓</b>, press <b>Enter</b> to select</span>
+          <span>Live API Search</span>
           <span className="flex items-center gap-1">
             <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px]">ESC</kbd> to close
           </span>
@@ -169,3 +206,4 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
     </div>
   );
 }
+

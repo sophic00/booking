@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Calendar, MapPin, Ticket, Flame, Users, Sparkles } from "lucide-react";
+import { Calendar, MapPin, Ticket, Flame, Users } from "lucide-react";
 import { EventItem } from "../../lib/types";
 
 interface EventCardProps {
@@ -12,16 +12,32 @@ interface EventCardProps {
 export function EventCard({ event }: EventCardProps) {
   const isSoldOut = event.seats_left === 0 || event.badge?.includes("Sold Out");
 
+  let minPrice = event.min_price;
+  let maxPrice = event.max_price;
+
+  if (event.pricing && event.pricing.length > 0) {
+    const prices = event.pricing.map((p) => p.price);
+    minPrice = Math.min(...prices);
+    maxPrice = Math.max(...prices);
+  }
+
   return (
     <div className="glass-panel glass-panel-hover rounded-2xl overflow-hidden flex flex-col justify-between group border border-slate-800 hover:border-indigo-500/40 transition-all duration-300">
       {/* Poster Image Container */}
       <div className="relative aspect-[16/10] w-full overflow-hidden bg-slate-900">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={event.poster_url || ""}
-          alt={event.title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-        />
+        {event.poster_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={event.poster_url}
+            alt={event.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-indigo-950/40 to-slate-900 text-slate-500">
+            <Ticket className="w-8 h-8 mb-1 text-indigo-400/40" />
+            <span className="text-xs font-mono">Live Event</span>
+          </div>
+        )}
 
         {/* Gradient Mask for readable text */}
         <div className="absolute inset-0 bg-gradient-to-t from-[#131A26] via-transparent to-black/30" />
@@ -71,10 +87,15 @@ export function EventCard({ event }: EventCardProps) {
 
           {/* Venue & Time info */}
           <div className="mt-2 space-y-1.5 text-xs text-slate-400">
-            <div className="flex items-center">
-              <MapPin className="w-3.5 h-3.5 mr-1.5 text-slate-500 shrink-0" />
-              <span className="truncate">{event.venue_name}, {event.venue_city}</span>
-            </div>
+            {event.venue_name && (
+              <div className="flex items-center">
+                <MapPin className="w-3.5 h-3.5 mr-1.5 text-slate-500 shrink-0" />
+                <span className="truncate">
+                  {event.venue_name}
+                  {event.venue_city ? `, ${event.venue_city}` : ""}
+                </span>
+              </div>
+            )}
             <div className="flex items-center">
               <Calendar className="w-3.5 h-3.5 mr-1.5 text-slate-500 shrink-0" />
               <span>
@@ -91,9 +112,18 @@ export function EventCard({ event }: EventCardProps) {
         {/* Pricing & CTA Row */}
         <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-3">
           <div>
-            <span className="text-[11px] text-slate-400 block">Tier Pricing</span>
+            <span className="text-[11px] text-slate-400 block">Pricing</span>
             <span className="text-sm font-black text-slate-100">
-              ${event.min_price} <span className="text-xs font-normal text-slate-400">- ${event.max_price}</span>
+              {minPrice !== undefined ? (
+                <>
+                  ${minPrice}
+                  {maxPrice !== undefined && maxPrice !== minPrice && (
+                    <span className="text-xs font-normal text-slate-400"> - ${maxPrice}</span>
+                  )}
+                </>
+              ) : (
+                <span className="text-xs text-slate-400 font-normal">View Tiers</span>
+              )}
             </span>
           </div>
 
@@ -122,3 +152,4 @@ export function EventCard({ event }: EventCardProps) {
     </div>
   );
 }
+

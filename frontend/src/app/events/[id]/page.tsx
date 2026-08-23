@@ -34,6 +34,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const [seatMap, setSeatMap] = useState<SeatMapItem[]>([]);
   const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Hold State
   const [holdData, setHoldData] = useState<HoldSeatsResponse | null>(null);
@@ -48,16 +50,25 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   // Waitlist State
   const [waitlistJoined, setWaitlistJoined] = useState(false);
 
-  // Load Event & Seat Map
-  useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      const ev = await fetchEventById(eventId);
-      const seats = await fetchEventSeatMap(eventId);
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [ev, seats] = await Promise.all([
+        fetchEventById(eventId),
+        fetchEventSeatMap(eventId),
+      ]);
       setEvent(ev);
       setSeatMap(seats);
+    } catch (err: any) {
+      setError(err.message || `Failed to load event #${eventId} from backend API`);
+    } finally {
       setLoading(false);
     }
+  };
+
+  // Load Event & Seat Map
+  useEffect(() => {
     loadData();
   }, [eventId]);
 
@@ -71,9 +82,9 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           clearInterval(interval);
           // Auto release hold on TTL expiry
           if (holdData) {
-            releaseHold(eventId, holdData.hold_token);
+            releaseHold(eventId, holdData.hold_token).catch(() => {});
             setHoldData(null);
-            alert("⏰ Your 10-minute seat hold has expired. The seats have been auto-released.");
+            setActionError("⏰ Your 10-minute seat hold has expired. The seats have been released.");
           }
           return 0;
         }
@@ -84,11 +95,39 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     return () => clearInterval(interval);
   }, [holdSecondsRemaining, holdData, eventId]);
 
-  if (loading || !event) {
+  if (loading) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center space-y-4">
         <RefreshCw className="w-10 h-10 animate-spin text-indigo-500" />
-        <p className="text-sm font-semibold text-slate-300">Loading interactive seat layout...</p>
+        <p className="text-sm font-semibold text-slate-300">Loading interactive seat layout from backend...</p>
+      </div>
+    );
+  }
+
+  if (error || !event) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-20 text-center space-y-6">
+        <div className="glass-panel rounded-3xl border border-rose-500/40 p-8 sm:p-12 space-y-4 bg-gradient-to-b from-rose-950/20 to-[#131A26]">
+          <AlertTriangle className="w-12 h-12 mx-auto text-rose-400" />
+          <h2 className="text-xl font-bold text-rose-200">Event Not Available</h2>
+          <p className="text-xs text-rose-300 font-mono bg-black/40 p-3 rounded-xl border border-rose-500/20 max-w-lg mx-auto">
+            {error || "Event not found on backend server."}
+          </p>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button
+              onClick={loadData}
+              className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-500 transition"
+            >
+              Try Again
+            </button>
+            <Link
+              href="/"
+              className="px-5 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 border border-slate-700 transition"
+            >
+              Back to Events
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
@@ -107,7 +146,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         return prev.filter((id) => id !== seat.seat_id);
       } else {
         if (prev.length >= 8) {
-          alert("Maximum 8 seats can be reserved in a single transaction.");
+          setActionError("Maximum 8 seats can be reserved in a single transaction.");
           return prev;
         }
         return [...prev, seat.seat_id];
@@ -116,26 +155,41 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   };
 
   const handleHoldSeats = async () => {
+    if (!user) {
+      router.push("/login");
+      return;
+    }
     if (selectedSeatIds.length === 0) return;
     setIsHolding(true);
+    setActionError(null);
     try {
       const res = await holdSeats(eventId, selectedSeatIds);
       setHoldData(res);
       setHoldSecondsRemaining(res.hold_ttl_seconds || 600);
+      // Reload seats to refresh lock statuses
+      const updatedSeats = await fetchEventSeatMap(eventId);
+      setSeatMap(updatedSeats);
     } catch (err: any) {
-      alert(err.message || "Failed to hold seats");
+      setActionError(err.message || "Failed to place seat hold on backend");
     } finally {
       setIsHolding(false);
     }
   };
 
   const handleConfirmCheckout = async () => {
-    if (selectedSeats.length === 0) return;
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+    if (!holdData) {
+      setActionError("Please reserve your seats with a hold first.");
+      return;
+    }
     setIsCheckingOut(true);
+    setActionError(null);
 
     try {
-      const token = holdData ? holdData.hold_token : "demo-hold-" + Date.now();
-      const booking = await checkoutBooking(eventId, token, selectedSeats, event);
+      const booking = await checkoutBooking(eventId, holdData.hold_token);
       setConfirmedBooking(booking);
       setShowQRModal(true);
 
@@ -150,7 +204,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
         // ignore
       }
     } catch (err: any) {
-      alert(err.message || "Checkout failed");
+      setActionError(err.message || "Checkout failed");
     } finally {
       setIsCheckingOut(false);
     }
@@ -277,6 +331,22 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               {isCheckingOut ? <RefreshCw className="w-4 h-4 animate-spin" /> : "Complete Purchase"}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Action Error Banner */}
+      {actionError && (
+        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/40 text-rose-300 text-xs flex items-center justify-between animate-in fade-in">
+          <div className="flex items-center space-x-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span className="font-semibold">{actionError}</span>
+          </div>
+          <button
+            onClick={() => setActionError(null)}
+            className="text-rose-400 hover:text-rose-200 p-1 font-bold"
+          >
+            ✕
+          </button>
         </div>
       )}
 
