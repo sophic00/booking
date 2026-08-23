@@ -99,3 +99,9 @@ WHERE status IN ('HELD', 'OFFERED') AND expires_at <= NOW();
 UPDATE seat_reservations
 SET status = 'BOOKED', booking_id = $3, updated_at = NOW()
 WHERE event_id = $1 AND hold_token = $2 AND status IN ('HELD', 'OFFERED');
+
+-- name: ReleaseExpiredSeatHold :execrows
+UPDATE seat_reservations
+SET status = 'RELEASED', updated_at = NOW()
+WHERE event_id = $1 AND seat_id = $2 AND status IN ('HELD', 'OFFERED') AND expires_at <= NOW();
+

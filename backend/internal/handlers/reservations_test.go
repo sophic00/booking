@@ -29,6 +29,14 @@ type mockReservationQuerier struct {
 	createSeatReservationFunc        func(ctx context.Context, arg generated.CreateSeatReservationParams) (generated.SeatReservation, error)
 	releaseSeatHoldByTokenFunc       func(ctx context.Context, arg generated.ReleaseSeatHoldByTokenParams) (int64, error)
 	releaseSeatHoldBySeatAndUserFunc func(ctx context.Context, arg generated.ReleaseSeatHoldBySeatAndUserParams) (int64, error)
+	releaseExpiredSeatHoldFunc       func(ctx context.Context, arg generated.ReleaseExpiredSeatHoldParams) (int64, error)
+}
+
+func (m *mockReservationQuerier) ReleaseExpiredSeatHold(ctx context.Context, arg generated.ReleaseExpiredSeatHoldParams) (int64, error) {
+	if m.releaseExpiredSeatHoldFunc != nil {
+		return m.releaseExpiredSeatHoldFunc(ctx, arg)
+	}
+	return 0, nil
 }
 
 func (m *mockReservationQuerier) GetEventSeatMapWithStatus(ctx context.Context, id pgtype.UUID) ([]generated.GetEventSeatMapWithStatusRow, error) {

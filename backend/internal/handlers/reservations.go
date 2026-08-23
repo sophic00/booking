@@ -247,6 +247,12 @@ func (h *ReservationHandler) HoldSeats(w http.ResponseWriter, r *http.Request) {
 		for _, sUUID := range seatUUIDs {
 			seatPgUUID := utils.UUIDToPgtype(sUUID)
 
+			// Clean up any expired holds for this seat first
+			_, _ = qtx.ReleaseExpiredSeatHold(r.Context(), generated.ReleaseExpiredSeatHoldParams{
+				EventID: eventPgUUID,
+				SeatID:  seatPgUUID,
+			})
+
 			avail, err := qtx.CheckSeatAvailable(r.Context(), generated.CheckSeatAvailableParams{
 				ID:   eventPgUUID,
 				ID_2: seatPgUUID,
@@ -294,6 +300,11 @@ func (h *ReservationHandler) HoldSeats(w http.ResponseWriter, r *http.Request) {
 		// Non-pool execution for mock tests
 		for _, sUUID := range seatUUIDs {
 			seatPgUUID := utils.UUIDToPgtype(sUUID)
+			_, _ = h.queries.ReleaseExpiredSeatHold(r.Context(), generated.ReleaseExpiredSeatHoldParams{
+				EventID: eventPgUUID,
+				SeatID:  seatPgUUID,
+			})
+
 			avail, err := h.queries.CheckSeatAvailable(r.Context(), generated.CheckSeatAvailableParams{
 				ID:   eventPgUUID,
 				ID_2: seatPgUUID,

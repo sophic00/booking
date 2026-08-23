@@ -60,6 +60,7 @@ type Querier interface {
 	ListSeatCategories(ctx context.Context) ([]SeatCategory, error)
 	ListVenues(ctx context.Context) ([]Venue, error)
 	PublishEvent(ctx context.Context, arg PublishEventParams) (Event, error)
+	ReleaseExpiredSeatHold(ctx context.Context, arg ReleaseExpiredSeatHoldParams) (int64, error)
 	ReleaseSeatHoldBySeatAndUser(ctx context.Context, arg ReleaseSeatHoldBySeatAndUserParams) (int64, error)
 	ReleaseSeatHoldByToken(ctx context.Context, arg ReleaseSeatHoldByTokenParams) (int64, error)
 	RevokeWaitlistOffer(ctx context.Context, id pgtype.UUID) (WaitlistOffer, error)

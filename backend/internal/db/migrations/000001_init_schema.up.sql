@@ -161,7 +161,7 @@ WHERE status = 'BOOKED';
 
 CREATE UNIQUE INDEX uq_event_seat_active_hold_offer 
 ON seat_reservations (event_id, seat_id) 
-WHERE status IN ('HELD', 'OFFERED') AND expires_at > NOW();
+WHERE status IN ('HELD', 'OFFERED');
 
 CREATE INDEX idx_seat_reservations_expiry 
 ON seat_reservations (status, expires_at) 

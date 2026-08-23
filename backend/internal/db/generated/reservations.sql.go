@@ -340,6 +340,25 @@ func (q *Queries) GetExpiredSeatHolds(ctx context.Context) ([]SeatReservation, e
 	return items, nil
 }
 
+const releaseExpiredSeatHold = `-- name: ReleaseExpiredSeatHold :execrows
+UPDATE seat_reservations
+SET status = 'RELEASED', updated_at = NOW()
+WHERE event_id = $1 AND seat_id = $2 AND status IN ('HELD', 'OFFERED') AND expires_at <= NOW()
+`
+
+type ReleaseExpiredSeatHoldParams struct {
+	EventID pgtype.UUID `json:"event_id"`
+	SeatID  pgtype.UUID `json:"seat_id"`
+}
+
+func (q *Queries) ReleaseExpiredSeatHold(ctx context.Context, arg ReleaseExpiredSeatHoldParams) (int64, error) {
+	result, err := q.db.Exec(ctx, releaseExpiredSeatHold, arg.EventID, arg.SeatID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const releaseSeatHoldBySeatAndUser = `-- name: ReleaseSeatHoldBySeatAndUser :execrows
 UPDATE seat_reservations
 SET status = 'RELEASED', updated_at = NOW()
