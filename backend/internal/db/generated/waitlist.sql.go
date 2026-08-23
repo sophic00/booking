@@ -37,6 +37,34 @@ func (q *Queries) AcceptWaitlistOffer(ctx context.Context, id pgtype.UUID) (Wait
 	return i, err
 }
 
+const countAvailableSeatsInCategory = `-- name: CountAvailableSeatsInCategory :one
+SELECT COUNT(*)
+FROM seats s
+JOIN events e ON e.venue_id = s.venue_id AND e.id = $1
+WHERE s.seat_category_id = $2
+  AND s.is_active = TRUE
+  AND NOT EXISTS (
+      SELECT 1 FROM seat_reservations sr
+      WHERE sr.event_id = e.id AND sr.seat_id = s.id
+        AND (
+            sr.status = 'BOOKED'
+            OR (sr.status IN ('HELD', 'OFFERED') AND sr.expires_at > NOW())
+        )
+  )
+`
+
+type CountAvailableSeatsInCategoryParams struct {
+	ID             pgtype.UUID `json:"id"`
+	SeatCategoryID pgtype.UUID `json:"seat_category_id"`
+}
+
+func (q *Queries) CountAvailableSeatsInCategory(ctx context.Context, arg CountAvailableSeatsInCategoryParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countAvailableSeatsInCategory, arg.ID, arg.SeatCategoryID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createWaitlistOffer = `-- name: CreateWaitlistOffer :one
 INSERT INTO waitlist_offers (
     waitlist_entry_id,
@@ -107,6 +135,120 @@ func (q *Queries) ExpireWaitlistOffer(ctx context.Context, id pgtype.UUID) (Wait
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getActiveHoldOrOfferByToken = `-- name: GetActiveHoldOrOfferByToken :many
+SELECT
+    sr.id, sr.event_id, sr.seat_id, sr.user_id, sr.status, sr.hold_token, sr.expires_at, sr.booking_id, sr.created_at, sr.updated_at,
+    s.row_label,
+    s.seat_number,
+    s.seat_category_id,
+    ep.price,
+    ep.currency,
+    sc.name AS category_name,
+    sc.color_code AS category_color
+FROM seat_reservations sr
+JOIN seats s ON sr.seat_id = s.id
+JOIN seat_categories sc ON s.seat_category_id = sc.id
+JOIN event_pricing ep ON ep.event_id = sr.event_id AND ep.seat_category_id = s.seat_category_id
+WHERE sr.event_id = $1 AND sr.hold_token = $2
+  AND sr.status IN ('HELD', 'OFFERED')
+  AND sr.expires_at > NOW()
+`
+
+type GetActiveHoldOrOfferByTokenParams struct {
+	EventID   pgtype.UUID `json:"event_id"`
+	HoldToken pgtype.UUID `json:"hold_token"`
+}
+
+type GetActiveHoldOrOfferByTokenRow struct {
+	ID             pgtype.UUID        `json:"id"`
+	EventID        pgtype.UUID        `json:"event_id"`
+	SeatID         pgtype.UUID        `json:"seat_id"`
+	UserID         pgtype.UUID        `json:"user_id"`
+	Status         ReservationStatus  `json:"status"`
+	HoldToken      pgtype.UUID        `json:"hold_token"`
+	ExpiresAt      pgtype.Timestamptz `json:"expires_at"`
+	BookingID      pgtype.UUID        `json:"booking_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	RowLabel       string             `json:"row_label"`
+	SeatNumber     string             `json:"seat_number"`
+	SeatCategoryID pgtype.UUID        `json:"seat_category_id"`
+	Price          pgtype.Numeric     `json:"price"`
+	Currency       string             `json:"currency"`
+	CategoryName   string             `json:"category_name"`
+	CategoryColor  string             `json:"category_color"`
+}
+
+func (q *Queries) GetActiveHoldOrOfferByToken(ctx context.Context, arg GetActiveHoldOrOfferByTokenParams) ([]GetActiveHoldOrOfferByTokenRow, error) {
+	rows, err := q.db.Query(ctx, getActiveHoldOrOfferByToken, arg.EventID, arg.HoldToken)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetActiveHoldOrOfferByTokenRow{}
+	for rows.Next() {
+		var i GetActiveHoldOrOfferByTokenRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventID,
+			&i.SeatID,
+			&i.UserID,
+			&i.Status,
+			&i.HoldToken,
+			&i.ExpiresAt,
+			&i.BookingID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.RowLabel,
+			&i.SeatNumber,
+			&i.SeatCategoryID,
+			&i.Price,
+			&i.Currency,
+			&i.CategoryName,
+			&i.CategoryColor,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getBookingFreedSeats = `-- name: GetBookingFreedSeats :many
+SELECT sr.seat_id, s.seat_category_id
+FROM seat_reservations sr
+JOIN seats s ON s.id = sr.seat_id
+WHERE sr.booking_id = $1
+`
+
+type GetBookingFreedSeatsRow struct {
+	SeatID         pgtype.UUID `json:"seat_id"`
+	SeatCategoryID pgtype.UUID `json:"seat_category_id"`
+}
+
+func (q *Queries) GetBookingFreedSeats(ctx context.Context, bookingID pgtype.UUID) ([]GetBookingFreedSeatsRow, error) {
+	rows, err := q.db.Query(ctx, getBookingFreedSeats, bookingID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetBookingFreedSeatsRow{}
+	for rows.Next() {
+		var i GetBookingFreedSeatsRow
+		if err := rows.Scan(&i.SeatID, &i.SeatCategoryID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getCustomerWaitlistEntry = `-- name: GetCustomerWaitlistEntry :one
@@ -392,6 +534,28 @@ func (q *Queries) GetWaitlistOfferByToken(ctx context.Context, offerToken pgtype
 	return i, err
 }
 
+const getWaitlistQueuePosition = `-- name: GetWaitlistQueuePosition :one
+SELECT COUNT(*)::int + 1 AS position
+FROM waitlist_entries
+WHERE event_id = $1
+  AND seat_category_id = $2
+  AND status = 'WAITING'
+  AND created_at < $3
+`
+
+type GetWaitlistQueuePositionParams struct {
+	EventID        pgtype.UUID        `json:"event_id"`
+	SeatCategoryID pgtype.UUID        `json:"seat_category_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetWaitlistQueuePosition(ctx context.Context, arg GetWaitlistQueuePositionParams) (int32, error) {
+	row := q.db.QueryRow(ctx, getWaitlistQueuePosition, arg.EventID, arg.SeatCategoryID, arg.CreatedAt)
+	var position int32
+	err := row.Scan(&position)
+	return position, err
+}
+
 const joinWaitlist = `-- name: JoinWaitlist :one
 INSERT INTO waitlist_entries (
     event_id,
@@ -422,6 +586,25 @@ func (q *Queries) JoinWaitlist(ctx context.Context, arg JoinWaitlistParams) (Wai
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const revokeOfferedSeatReservation = `-- name: RevokeOfferedSeatReservation :execrows
+UPDATE seat_reservations
+SET status = 'RELEASED', updated_at = NOW()
+WHERE event_id = $1 AND seat_id = $2 AND status = 'OFFERED'
+`
+
+type RevokeOfferedSeatReservationParams struct {
+	EventID pgtype.UUID `json:"event_id"`
+	SeatID  pgtype.UUID `json:"seat_id"`
+}
+
+func (q *Queries) RevokeOfferedSeatReservation(ctx context.Context, arg RevokeOfferedSeatReservationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeOfferedSeatReservation, arg.EventID, arg.SeatID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const revokeWaitlistOffer = `-- name: RevokeWaitlistOffer :one

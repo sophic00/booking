@@ -120,3 +120,55 @@ SET status = 'REVOKED',
     updated_at = NOW()
 WHERE id = $1
 RETURNING *;
+
+-- name: CountAvailableSeatsInCategory :one
+SELECT COUNT(*)
+FROM seats s
+JOIN events e ON e.venue_id = s.venue_id AND e.id = $1
+WHERE s.seat_category_id = $2
+  AND s.is_active = TRUE
+  AND NOT EXISTS (
+      SELECT 1 FROM seat_reservations sr
+      WHERE sr.event_id = e.id AND sr.seat_id = s.id
+        AND (
+            sr.status = 'BOOKED'
+            OR (sr.status IN ('HELD', 'OFFERED') AND sr.expires_at > NOW())
+        )
+  );
+
+-- name: GetWaitlistQueuePosition :one
+SELECT COUNT(*)::int + 1 AS position
+FROM waitlist_entries
+WHERE event_id = $1
+  AND seat_category_id = $2
+  AND status = 'WAITING'
+  AND created_at < $3;
+
+-- name: GetBookingFreedSeats :many
+SELECT sr.seat_id, s.seat_category_id
+FROM seat_reservations sr
+JOIN seats s ON s.id = sr.seat_id
+WHERE sr.booking_id = $1;
+
+-- name: GetActiveHoldOrOfferByToken :many
+SELECT
+    sr.*,
+    s.row_label,
+    s.seat_number,
+    s.seat_category_id,
+    ep.price,
+    ep.currency,
+    sc.name AS category_name,
+    sc.color_code AS category_color
+FROM seat_reservations sr
+JOIN seats s ON sr.seat_id = s.id
+JOIN seat_categories sc ON s.seat_category_id = sc.id
+JOIN event_pricing ep ON ep.event_id = sr.event_id AND ep.seat_category_id = s.seat_category_id
+WHERE sr.event_id = $1 AND sr.hold_token = $2
+  AND sr.status IN ('HELD', 'OFFERED')
+  AND sr.expires_at > NOW();
+
+-- name: RevokeOfferedSeatReservation :execrows
+UPDATE seat_reservations
+SET status = 'RELEASED', updated_at = NOW()
+WHERE event_id = $1 AND seat_id = $2 AND status = 'OFFERED';
