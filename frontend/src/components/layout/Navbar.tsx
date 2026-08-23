@@ -43,7 +43,7 @@ export function Navbar() {
                   VELVET<span className="text-indigo-400">SEATS</span>
                 </span>
                 <span className="hidden sm:block text-[10px] tracking-wider uppercase text-slate-400 font-mono">
-                  Live Event Reservation
+                  Official Tickets & Live Shows
                 </span>
               </div>
             </Link>
@@ -128,7 +128,7 @@ export function Navbar() {
                   pathname === "/my-bookings" ? "text-indigo-400 font-semibold" : ""
                 }`}
               >
-                My Bookings
+                My Tickets
               </Link>
               <Link
                 href="/organiser"
@@ -166,7 +166,7 @@ export function Navbar() {
                       {user.full_name}
                     </span>
                     <span className="text-[10px] text-indigo-400 font-mono block">
-                      {user.role}
+                      {user.role === "CUSTOMER" ? "Fan" : "Organiser"}
                     </span>
                   </div>
                   <ChevronDown className="w-3 h-3 text-slate-400" />
@@ -179,7 +179,7 @@ export function Navbar() {
                       <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
                       <div className="mt-1.5 flex items-center">
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono font-medium border border-indigo-500/30">
-                          {user.role} MODE
+                          {user.role} ACCOUNT
                         </span>
                       </div>
                     </div>
@@ -191,7 +191,7 @@ export function Navbar() {
                         className="flex items-center px-4 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition"
                       >
                         <CalendarCheck className="w-4 h-4 mr-2.5 text-indigo-400" />
-                        My Bookings & QR Tickets
+                        My Tickets & Passes
                       </Link>
 
                       <Link
@@ -206,7 +206,7 @@ export function Navbar() {
                       {/* Quick Role Switcher */}
                       <div className="px-4 py-2 border-t border-slate-800/80 my-1">
                         <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider block mb-1">
-                          Switch Role
+                          Account Mode
                         </span>
                         <div className="grid grid-cols-2 gap-1.5 bg-slate-900 p-1 rounded-lg">
                           <button

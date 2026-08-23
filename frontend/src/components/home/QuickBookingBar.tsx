@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Film, Music2, Calendar, MapPin, DollarSign, Search } from "lucide-react";
+import { Film, Calendar, MapPin, DollarSign, Search, ShieldCheck } from "lucide-react";
 
 interface QuickBookingBarProps {
   onFilterChange: (filters: {
@@ -118,18 +118,18 @@ export function QuickBookingBar({ onFilterChange }: QuickBookingBarProps) {
           </div>
         </div>
 
-        {/* Live Concurrency Info Strip */}
+        {/* Buyer Guarantee Strip */}
         <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
           <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
             <span>
-              <b>Live Anti-Scalping Engine:</b> 10-Minute Lock TTL active on all seat selections.
+              <b>100% Buyer Guarantee:</b> Verified authentic tickets with 10-minute cart reservation.
             </span>
           </div>
-          <div className="flex items-center space-x-4 text-slate-500">
-            <span>⚡ Zero-Double-Booking Guarantee</span>
+          <div className="flex items-center space-x-4 text-slate-400">
+            <span>✨ Instant Mobile Entry</span>
             <span>•</span>
-            <span>🔄 Instant Waitlist Auto-Pass</span>
+            <span>🎟️ Official Box Office Seats</span>
           </div>
         </div>
       </form>

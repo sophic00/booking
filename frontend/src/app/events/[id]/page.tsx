@@ -257,10 +257,10 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             </div>
             <div>
               <h4 className="text-sm font-bold text-amber-300">
-                10-Minute Fair Hold Active ({selectedSeats.length} seats locked)
+                10-Minute Cart Hold Active ({selectedSeats.length} seats reserved)
               </h4>
               <p className="text-xs text-slate-400">
-                Your seats are reserved and hidden from all other customers. Complete checkout before timer expires.
+                Your seats are held in your cart for 10 minutes. Complete checkout before the timer expires.
               </p>
             </div>
           </div>
@@ -274,7 +274,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
               disabled={isCheckingOut}
               className="px-5 py-2.5 rounded-xl font-bold text-xs text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-lg shadow-emerald-600/30 transition flex items-center shrink-0"
             >
-              {isCheckingOut ? <RefreshCw className="w-4 h-4 animate-spin" /> : "Confirm Now"}
+              {isCheckingOut ? <RefreshCw className="w-4 h-4 animate-spin" /> : "Complete Purchase"}
             </button>
           </div>
         </div>
@@ -484,7 +484,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                 ) : (
                   <>
                     <Zap className="w-4 h-4 mr-1.5" />
-                    Place 10-Min Hold & Checkout
+                    Reserve Seats & Proceed
                   </>
                 )}
               </button>
@@ -499,7 +499,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4 mr-2" />
-                    Confirm Booking (${grandTotal.toFixed(2)})
+                    Complete Purchase (${grandTotal.toFixed(2)})
                   </>
                 )}
               </button>
@@ -507,7 +507,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
             <div className="flex items-center justify-center space-x-1.5 text-[11px] text-slate-500 font-mono pt-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Instant QR E-Ticket Dispatch</span>
+              <span>Instant Digital Mobile Pass Delivery</span>
             </div>
           </div>
         </div>
@@ -526,7 +526,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
             <div className="space-y-1">
               <h2 className="text-xl font-black text-white">Booking Confirmed!</h2>
               <p className="text-xs text-slate-400">
-                Your seats have been permanently locked and scannable QR tickets are generated.
+                Your order is confirmed and your mobile passes are ready below.
               </p>
             </div>
 

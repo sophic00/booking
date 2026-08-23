@@ -101,7 +101,7 @@ export default function OrganiserPage() {
         <div className="flex items-center space-x-3 text-xs text-slate-400 font-mono">
           <span className="flex items-center text-emerald-400 font-bold">
             <span className="w-2 h-2 rounded-full bg-emerald-400 mr-1.5 animate-pulse" />
-            Live Concurrency Engine Active
+            Live Sales & Ticketing Active
           </span>
         </div>
       </div>

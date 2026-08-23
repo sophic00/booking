@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { Building2, BarChart3, Users, ArrowRight, Shield } from "lucide-react";
+import { Building2, BarChart3, Users, ArrowRight, Shield, Timer } from "lucide-react";
 
 export function OrganiserCallout() {
   return (
@@ -23,7 +23,7 @@ export function OrganiserCallout() {
               </h2>
 
               <p className="text-slate-300 text-xs sm:text-sm max-w-xl leading-relaxed">
-                Create event listings with custom venue seat layouts, configure per-category pricing tiers, set customizable seat hold TTLs, and monitor real-time revenue analytics and waitlist conversions.
+                Create event listings with custom venue seat layouts, configure per-category pricing tiers, customize reservation hold timers, and monitor real-time ticket sales and waitlist conversions.
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
@@ -36,8 +36,8 @@ export function OrganiserCallout() {
                   <span>Automated Waitlist Queues</span>
                 </div>
                 <div className="flex items-center space-x-2 text-xs text-slate-300">
-                  <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Anti-Scalp Hold Control</span>
+                  <Timer className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Custom Cart Hold Controls</span>
                 </div>
               </div>
             </div>

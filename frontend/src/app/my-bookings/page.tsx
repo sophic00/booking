@@ -7,7 +7,6 @@ import {
   MapPin,
   Ticket,
   QrCode,
-  AlertTriangle,
   CheckCircle2,
   RefreshCw,
   XCircle,
@@ -37,7 +36,7 @@ export default function MyBookingsPage() {
 
   const handleCancelBooking = async (booking: Booking) => {
     const confirmCancel = window.confirm(
-      `Are you sure you want to cancel booking ${booking.booking_reference}? Your seats will be automatically reallocated to the next fan on the waitlist.`
+      `Are you sure you want to cancel booking ${booking.booking_reference}? A refund will be initiated according to venue policy.`
     );
     if (!confirmCancel) return;
 
@@ -52,9 +51,7 @@ export default function MyBookingsPage() {
               : b
           )
         );
-        alert(
-          `✅ Booking ${booking.booking_reference} has been cancelled. Automated waitlist engine has been notified to reallocate the seats.`
-        );
+        alert(`✅ Booking ${booking.booking_reference} has been cancelled successfully.`);
       }
     } catch {
       alert("Failed to cancel booking.");
@@ -73,10 +70,10 @@ export default function MyBookingsPage() {
             <span>MY PASSES & RESERVATIONS</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mt-1">
-            My Booking History & QR Tickets
+            My Tickets & Passes
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Manage your confirmed shows, view encrypted scannable QR passes, or cancel bookings.
+            Manage your upcoming events, access digital passes, and view receipts.
           </p>
         </div>
 
@@ -84,7 +81,7 @@ export default function MyBookingsPage() {
           href="/"
           className="px-5 py-2.5 rounded-xl font-bold text-xs text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-md shadow-indigo-600/20 transition self-start sm:self-auto flex items-center"
         >
-          Book Another Show
+          Explore More Shows
           <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
         </Link>
       </div>
@@ -93,14 +90,14 @@ export default function MyBookingsPage() {
       {loading ? (
         <div className="py-20 text-center text-slate-400">
           <RefreshCw className="w-8 h-8 mx-auto animate-spin text-indigo-400 mb-3" />
-          <p className="font-semibold text-slate-300">Loading your passes & ticket codes...</p>
+          <p className="font-semibold text-slate-300">Loading your tickets & mobile passes...</p>
         </div>
       ) : bookings.length === 0 ? (
         <div className="py-20 text-center glass-panel rounded-3xl border border-slate-800 p-8 space-y-4">
           <Ticket className="w-12 h-12 mx-auto text-slate-600" />
-          <h3 className="text-lg font-bold text-slate-200">No bookings found yet</h3>
+          <h3 className="text-lg font-bold text-slate-200">No tickets found yet</h3>
           <p className="text-xs text-slate-400 max-w-md mx-auto">
-            You haven&apos;t reserved any shows yet. Explore our live concerts and cinema screenings to reserve seats with a 10-minute hold guarantee.
+            You haven&apos;t booked any shows yet. Explore our live concerts and cinema screenings to reserve seats with instant mobile passes.
           </p>
           <Link
             href="/"
@@ -124,7 +121,7 @@ export default function MyBookingsPage() {
                   <div>
                     <div className="flex items-center gap-3">
                       <span className="text-xs font-mono font-bold text-indigo-400">
-                        REF: {booking.booking_reference}
+                        ORDER #{booking.booking_reference}
                       </span>
                       <span
                         className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider flex items-center ${
@@ -136,7 +133,7 @@ export default function MyBookingsPage() {
                         {isConfirmed ? (
                           <>
                             <CheckCircle2 className="w-3 h-3 mr-1" />
-                            Confirmed & Active
+                            Active & Confirmed
                           </>
                         ) : (
                           <>
@@ -209,7 +206,7 @@ export default function MyBookingsPage() {
                 {/* Ticket Details & Seats */}
                 <div className="space-y-3">
                   <span className="text-xs font-semibold text-slate-400 uppercase font-mono tracking-wider block">
-                    Reserved Seats ({booking.ticket_count || booking.tickets?.length || 2} Tickets)
+                    Reserved Seats ({booking.ticket_count || booking.tickets?.length || 2} Passes)
                   </span>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
@@ -231,7 +228,7 @@ export default function MyBookingsPage() {
                         </div>
 
                         <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-emerald-400 font-mono font-bold">
-                          {isConfirmed ? "VALID" : "VOID"}
+                          {isConfirmed ? "VALID" : "CANCELLED"}
                         </span>
                       </div>
                     ))}
@@ -240,9 +237,9 @@ export default function MyBookingsPage() {
 
                 {/* Action Buttons */}
                 <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-800">
-                  <div className="flex items-center space-x-2 text-[11px] text-slate-500 font-mono">
-                    <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Cryptographic QR Verification Active</span>
+                  <div className="flex items-center space-x-2 text-[11px] text-slate-400 font-mono">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Official Mobile Pass • Ready for Gate Admission</span>
                   </div>
 
                   <div className="flex items-center gap-3">
@@ -258,7 +255,7 @@ export default function MyBookingsPage() {
                           ) : (
                             <XCircle className="w-3.5 h-3.5 mr-1.5" />
                           )}
-                          Cancel Booking & Auto-Reallocate
+                          Cancel Booking
                         </button>
 
                         <button
@@ -266,7 +263,7 @@ export default function MyBookingsPage() {
                           className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-md shadow-indigo-600/25 transition flex items-center"
                         >
                           <QrCode className="w-3.5 h-3.5 mr-1.5" />
-                          View QR E-Pass
+                          View Mobile Pass
                         </button>
                       </>
                     )}
@@ -290,7 +287,7 @@ export default function MyBookingsPage() {
           >
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
               <span className="text-xs font-mono text-indigo-400 font-bold">
-                REF: {selectedBookingForQR.booking_reference}
+                ORDER #{selectedBookingForQR.booking_reference}
               </span>
               <button
                 onClick={() => setSelectedBookingForQR(null)}
@@ -328,8 +325,8 @@ export default function MyBookingsPage() {
               </div>
             </div>
 
-            <p className="text-[10px] text-slate-500 font-mono">
-              Scan this barcode at venue admission turnstiles for instant entrance verification.
+            <p className="text-[10px] text-slate-400 font-mono">
+              Display this barcode on your phone at venue admission turnstiles for fast entry.
             </p>
           </div>
         </div>

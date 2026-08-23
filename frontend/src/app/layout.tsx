@@ -5,9 +5,9 @@ import { Navbar } from "../components/layout/Navbar";
 import { Footer } from "../components/layout/Footer";
 
 export const metadata: Metadata = {
-  title: "VelvetSeats | High-Demand Live Event & Cinema Reservation Platform",
+  title: "VelvetSeats | Movies, Concerts & Live Entertainment Tickets",
   description:
-    "Book movie and concert tickets with real-time visual seat maps, 10-minute anti-scalp hold guarantee, automated cancellation waitlist reallocation, and verified QR e-tickets.",
+    "Discover and book official tickets for live concerts, movies, theater, and stadium events. Interactive seat maps, 10-minute cart reservation, smart waitlists, and instant mobile passes.",
 };
 
 export default function RootLayout({

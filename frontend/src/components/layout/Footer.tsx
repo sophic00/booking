@@ -14,9 +14,9 @@ export function Footer() {
                 <Zap className="w-4 h-4 text-indigo-400" />
               </div>
               <div>
-                <h4 className="text-slate-200 font-semibold text-sm">10-Min Fair Hold</h4>
+                <h4 className="text-slate-200 font-semibold text-sm">10-Minute Cart Hold</h4>
                 <p className="text-slate-500 text-xs mt-0.5">
-                  Exclusive seat reservation with automated TTL auto-release countdown.
+                  Your selected seats are held in your cart for 10 minutes while you complete your purchase.
                 </p>
               </div>
             </div>
@@ -26,9 +26,9 @@ export function Footer() {
                 <ShieldCheck className="w-4 h-4 text-violet-400" />
               </div>
               <div>
-                <h4 className="text-slate-200 font-semibold text-sm">Zero Concurrency Clashes</h4>
+                <h4 className="text-slate-200 font-semibold text-sm">100% Verified Tickets</h4>
                 <p className="text-slate-500 text-xs mt-0.5">
-                  Transactional atomic seat locks ensure no double bookings occur.
+                  Authentic digital tickets sourced directly from official venues and event organizers.
                 </p>
               </div>
             </div>
@@ -38,9 +38,9 @@ export function Footer() {
                 <RefreshCw className="w-4 h-4 text-emerald-400" />
               </div>
               <div>
-                <h4 className="text-slate-200 font-semibold text-sm">Auto-Waitlist Engine</h4>
+                <h4 className="text-slate-200 font-semibold text-sm">Smart Waitlist</h4>
                 <p className="text-slate-500 text-xs mt-0.5">
-                  Cancellations instantly re-allocate to waitlist with time-limited links.
+                  Sold-out show? Get notified first the moment seats or new showtimes become available.
                 </p>
               </div>
             </div>
@@ -50,9 +50,9 @@ export function Footer() {
                 <QrCode className="w-4 h-4 text-amber-400" />
               </div>
               <div>
-                <h4 className="text-slate-200 font-semibold text-sm">Instant QR E-Tickets</h4>
+                <h4 className="text-slate-200 font-semibold text-sm">Instant Mobile Entry</h4>
                 <p className="text-slate-500 text-xs mt-0.5">
-                  Encrypted, scannable digital passes delivered straight to your email.
+                  Scannable digital passes delivered straight to your email and phone for quick entry.
                 </p>
               </div>
             </div>
@@ -74,11 +74,11 @@ export function Footer() {
               </span>
             </Link>
             <p className="text-slate-400 max-w-sm text-xs leading-relaxed">
-              High-concurrency live event and cinema reservation platform. Designed for instant seat holds, verified QR ticketing, and automated queue re-allocation.
+              Your premier destination for live concerts, movies, and theater events worldwide. Guaranteed authentic tickets with instant mobile delivery.
             </p>
             <div className="flex items-center space-x-2 text-slate-500 text-[11px] font-mono">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>System operational • Postgres Concurrency Engine active</span>
+              <span>Official Ticketing Partner • Safe & Secure Checkout</span>
             </div>
           </div>
 
@@ -98,7 +98,7 @@ export function Footer() {
                 <Link href="/" className="hover:text-indigo-400 transition">Theatres & Musicals</Link>
               </li>
               <li>
-                <Link href="/my-bookings" className="hover:text-indigo-400 transition">My Booking History</Link>
+                <Link href="/my-bookings" className="hover:text-indigo-400 transition">My Tickets</Link>
               </li>
               <li>
                 <Link href="/" className="hover:text-indigo-400 transition">Waitlist Priority Hub</Link>
@@ -136,7 +136,7 @@ export function Footer() {
               Stay in the Loop
             </h5>
             <p className="text-slate-400 text-xs mb-3">
-              Get notified first when sold-out headliners release waitlist seats.
+              Get notified first when sold-out headliners release waitlist seats or new tour dates.
             </p>
             <div className="flex items-center space-x-1.5">
               <div className="relative flex-1">
@@ -159,13 +159,13 @@ export function Footer() {
 
         {/* Bottom Bar */}
         <div className="border-t border-slate-800/80 mt-10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-500">
-          <p>© 2026 VelvetSeats Inc. Built for high-demand concerts and cinemas.</p>
+          <p>© 2026 VelvetSeats Inc. Official ticketing partner.</p>
           <div className="flex items-center space-x-4">
             <Link href="/" className="hover:text-slate-400 transition">Privacy Policy</Link>
             <span>•</span>
-            <Link href="/" className="hover:text-slate-400 transition">Terms of Reservation</Link>
+            <Link href="/" className="hover:text-slate-400 transition">Terms of Service</Link>
             <span>•</span>
-            <Link href="/" className="hover:text-slate-400 transition">Anti-Scalping Rules</Link>
+            <Link href="/" className="hover:text-slate-400 transition">Buyer Guarantee</Link>
           </div>
         </div>
       </div>
