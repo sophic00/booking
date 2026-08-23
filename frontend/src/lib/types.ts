@@ -136,6 +136,98 @@ export interface Booking {
   created_at: string;
 }
 
+export interface Venue {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  state?: string | null;
+  country: string;
+  total_capacity: number;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateVenuePayload {
+  name: string;
+  address: string;
+  city: string;
+  state?: string;
+  country?: string;
+  total_capacity?: number;
+}
+
+export interface UpdateVenuePayload {
+  name: string;
+  address: string;
+  city: string;
+  state?: string;
+  country: string;
+  total_capacity: number;
+}
+
+export interface SeatCategory {
+  id: string;
+  name: string;
+  description?: string | null;
+  color_code: string;
+  created_at: string;
+}
+
+export interface CreateCategoryPayload {
+  name: string;
+  description?: string;
+  color_code?: string;
+}
+
+export interface VenueSeat {
+  id: string;
+  venue_id: string;
+  seat_category_id: string;
+  category_name?: string;
+  category_color?: string;
+  row_label: string;
+  seat_number: string;
+  grid_row: number;
+  grid_col: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface CreateSeatPayload {
+  seat_category_id: string;
+  row_label: string;
+  seat_number: string;
+  grid_row: number;
+  grid_col: number;
+  is_active?: boolean;
+}
+
+export interface BatchCreateSeatsPayload {
+  replace: boolean;
+  seats: CreateSeatPayload[];
+}
+
+export interface CategoryPricingPayloadItem {
+  seat_category_id: string;
+  price: number;
+  currency?: string;
+}
+
+export interface WaitlistEntry {
+  id: string;
+  event_id: string;
+  event_title?: string;
+  seat_category_id: string;
+  category_name?: string;
+  category_color?: string;
+  status: "WAITING" | "OFFERED" | "ACCEPTED" | "EXPIRED" | "CANCELLED";
+  queue_position: number;
+  event_start_time?: string;
+  created_at: string;
+}
+
 export interface CategoryBreakdown {
   seat_category_id: string;
   category_name: string;
@@ -237,3 +329,4 @@ export interface EventCheckInOverview {
   check_in_rate: number;
   tickets?: EventTicketItem[];
 }
+

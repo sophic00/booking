@@ -9,6 +9,16 @@ import {
   TicketVerificationResult,
   EventTicketItem,
   EventCheckInOverview,
+  Venue,
+  CreateVenuePayload,
+  UpdateVenuePayload,
+  SeatCategory,
+  CreateCategoryPayload,
+  VenueSeat,
+  CreateSeatPayload,
+  BatchCreateSeatsPayload,
+  CategoryPricingPayloadItem,
+  WaitlistEntry,
 } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1";
@@ -301,5 +311,249 @@ export async function fetchEventTickets(
 
   return handleResponse<EventCheckInOverview>(res, "Failed to fetch event tickets");
 }
+
+// ============================================================================
+// VENUES & SEAT LAYOUT API (PUBLIC & ADMIN)
+// ============================================================================
+
+export async function fetchVenues(): Promise<Venue[]> {
+  const res = await fetch(`${API_BASE}/venues`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  const data = await handleResponse<Venue[]>(res, "Failed to fetch venues");
+  return Array.isArray(data) ? data : [];
+}
+
+export async function fetchVenueById(venueId: string): Promise<Venue> {
+  const res = await fetch(`${API_BASE}/venues/${venueId}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  return handleResponse<Venue>(res, `Failed to fetch venue ${venueId}`);
+}
+
+export async function fetchVenueSeats(venueId: string): Promise<VenueSeat[]> {
+  const res = await fetch(`${API_BASE}/venues/${venueId}/seats`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  const data = await handleResponse<VenueSeat[]>(res, `Failed to fetch seats for venue ${venueId}`);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function createVenue(payload: CreateVenuePayload): Promise<Venue> {
+  const res = await fetch(`${API_BASE}/admin/venues`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(6000),
+  });
+
+  return handleResponse<Venue>(res, "Failed to create venue");
+}
+
+export async function updateVenue(venueId: string, payload: UpdateVenuePayload): Promise<Venue> {
+  const res = await fetch(`${API_BASE}/admin/venues/${venueId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(6000),
+  });
+
+  return handleResponse<Venue>(res, "Failed to update venue");
+}
+
+export async function deleteVenue(venueId: string): Promise<boolean> {
+  const res = await fetch(`${API_BASE}/admin/venues/${venueId}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  await handleResponse<any>(res, "Failed to delete venue");
+  return true;
+}
+
+export async function batchConfigureSeats(
+  venueId: string,
+  payload: BatchCreateSeatsPayload
+): Promise<{ venue_id: string; total_configured: number; active_capacity: number }> {
+  const res = await fetch(`${API_BASE}/admin/venues/${venueId}/seats/batch`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(8000),
+  });
+
+  return handleResponse<{ venue_id: string; total_configured: number; active_capacity: number }>(
+    res,
+    "Failed to configure venue seat layout"
+  );
+}
+
+export async function deleteVenueSeats(venueId: string): Promise<boolean> {
+  const res = await fetch(`${API_BASE}/admin/venues/${venueId}/seats`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  await handleResponse<any>(res, "Failed to delete venue seats");
+  return true;
+}
+
+// ============================================================================
+// SEAT CATEGORIES API (PUBLIC & ADMIN)
+// ============================================================================
+
+export async function fetchCategories(): Promise<SeatCategory[]> {
+  const res = await fetch(`${API_BASE}/categories`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  const data = await handleResponse<SeatCategory[]>(res, "Failed to fetch seat categories");
+  return Array.isArray(data) ? data : [];
+}
+
+export async function createCategory(payload: CreateCategoryPayload): Promise<SeatCategory> {
+  const res = await fetch(`${API_BASE}/admin/categories`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(5000),
+  });
+
+  return handleResponse<SeatCategory>(res, "Failed to create seat category");
+}
+
+// ============================================================================
+// WAITLIST & OFFERS API (CUSTOMER)
+// ============================================================================
+
+export async function joinWaitlist(
+  eventId: string,
+  seatCategoryId: string
+): Promise<WaitlistEntry> {
+  const res = await fetch(`${API_BASE}/events/${eventId}/waitlist`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    body: JSON.stringify({ seat_category_id: seatCategoryId }),
+    signal: AbortSignal.timeout(5000),
+  });
+
+  return handleResponse<WaitlistEntry>(res, "Failed to join waitlist");
+}
+
+export async function fetchCustomerWaitlists(): Promise<WaitlistEntry[]> {
+  const res = await fetch(`${API_BASE}/customer/waitlists`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  const data = await handleResponse<WaitlistEntry[]>(res, "Failed to fetch your waitlists");
+  return Array.isArray(data) ? data : [];
+}
+
+export async function acceptWaitlistOffer(token: string): Promise<Booking> {
+  const res = await fetch(`${API_BASE}/waitlist/offers/${token}/accept`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    signal: AbortSignal.timeout(8000),
+  });
+
+  return handleResponse<Booking>(res, "Failed to accept waitlist offer");
+}
+
+// ============================================================================
+// ORGANISER EVENT ACTIONS API
+// ============================================================================
+
+export async function publishEvent(eventId: string): Promise<EventItem> {
+  const res = await fetch(`${API_BASE}/organiser/events/${eventId}/publish`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  return handleResponse<EventItem>(res, "Failed to publish event");
+}
+
+export async function cancelEvent(eventId: string): Promise<EventItem> {
+  const res = await fetch(`${API_BASE}/organiser/events/${eventId}/cancel`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  return handleResponse<EventItem>(res, "Failed to cancel event");
+}
+
+export async function setEventPricing(
+  eventId: string,
+  pricing: CategoryPricingPayloadItem[]
+): Promise<any[]> {
+  const res = await fetch(`${API_BASE}/organiser/events/${eventId}/pricing`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    body: JSON.stringify({ pricing }),
+    signal: AbortSignal.timeout(6000),
+  });
+
+  return handleResponse<any[]>(res, "Failed to update event pricing");
+}
+
 
 
