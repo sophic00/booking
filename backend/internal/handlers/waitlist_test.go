@@ -36,6 +36,7 @@ type mockWaitlistQuerier struct {
 	createTicketFunc                  func(ctx context.Context, arg generated.CreateTicketParams) (generated.Ticket, error)
 	confirmReservationToBookedFunc    func(ctx context.Context, arg generated.ConfirmReservationToBookedParams) (int64, error)
 	updateWaitlistEntryStatusFunc     func(ctx context.Context, arg generated.UpdateWaitlistEntryStatusParams) (generated.WaitlistEntry, error)
+	acceptWaitlistOfferFunc           func(ctx context.Context, id pgtype.UUID) (generated.WaitlistOffer, error)
 }
 
 func (m *mockWaitlistQuerier) GetEventByID(ctx context.Context, id pgtype.UUID) (generated.GetEventByIDRow, error) {
@@ -127,6 +128,13 @@ func (m *mockWaitlistQuerier) UpdateWaitlistEntryStatus(ctx context.Context, arg
 		return m.updateWaitlistEntryStatusFunc(ctx, arg)
 	}
 	return generated.WaitlistEntry{ID: arg.ID, Status: arg.Status}, nil
+}
+
+func (m *mockWaitlistQuerier) AcceptWaitlistOffer(ctx context.Context, id pgtype.UUID) (generated.WaitlistOffer, error) {
+	if m.acceptWaitlistOfferFunc != nil {
+		return m.acceptWaitlistOfferFunc(ctx, id)
+	}
+	return generated.WaitlistOffer{ID: id, Status: generated.OfferStatusACCEPTED}, nil
 }
 
 // ============================================================================

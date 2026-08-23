@@ -397,6 +397,10 @@ func confirmOfferTx(
 	}); err != nil {
 		return generated.Booking{}, wrapConfirmErr(errKindDB, err)
 	}
+
+	if _, err := q.AcceptWaitlistOffer(ctx, offer.ID); err != nil {
+		return generated.Booking{}, wrapConfirmErr(errKindDB, err)
+	}
 	return booking, nil
 }
 
