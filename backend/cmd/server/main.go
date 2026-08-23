@@ -46,6 +46,7 @@ func main() {
 	eventHandler := handlers.NewEventHandler(queries, database.Pool)
 	reservationHandler := handlers.NewReservationHandler(queries, database.Pool, cfg)
 	bookingHandler := handlers.NewBookingHandler(queries, database.Pool, cfg, mailer)
+	ticketHandler := handlers.NewTicketHandler(queries, database.Pool, cfg)
 	waitlistHandler := handlers.NewWaitlistHandler(queries, database.Pool, cfg, mailer)
 	waitlistAssigner := handlers.NewWaitlistAssigner(queries, database.Pool, cfg, mailer)
 
@@ -152,6 +153,21 @@ func main() {
 			r.Post("/bookings/checkout", bookingHandler.Checkout)
 		})
 
+		// Ticket Verification Endpoints (Customer for own ticket, Organiser/Admin for event tickets)
+		r.Group(func(r chi.Router) {
+			r.Use(appmiddleware.Authenticate(cfg.JWTSecret))
+			r.Post("/tickets/verify", ticketHandler.VerifyTicket)
+			r.Get("/tickets/verify", ticketHandler.VerifyTicket)
+		})
+
+		// Ticket Check-In Endpoints (Organiser/Admin only)
+		r.Group(func(r chi.Router) {
+			r.Use(appmiddleware.Authenticate(cfg.JWTSecret))
+			r.Use(appmiddleware.OrganiserOrAdmin)
+			r.Post("/tickets/check-in", ticketHandler.CheckInTicket)
+			r.Post("/tickets/{id}/check-in", ticketHandler.CheckInTicket)
+		})
+
 		// Protected Customer Bookings Management
 		r.Route("/customer", func(r chi.Router) {
 			r.Use(appmiddleware.Authenticate(cfg.JWTSecret))
@@ -212,6 +228,9 @@ func main() {
 
 			// Organiser Analytics & Booking Summary
 			r.Get("/events/{id}/analytics", eventHandler.GetEventAnalytics)
+
+			// Organiser Event Tickets & Check-In Management
+			r.Get("/events/{id}/tickets", ticketHandler.ListEventTickets)
 		})
 	})
 

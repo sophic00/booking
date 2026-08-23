@@ -122,6 +122,7 @@ type EventAnalyticsResponse struct {
 	ConfirmedBookingsCount int64                       `json:"confirmed_bookings_count"`
 	CancelledBookingsCount int64                       `json:"cancelled_bookings_count"`
 	ValidTicketsCount      int64                       `json:"valid_tickets_count"`
+	CheckedInTicketsCount  int64                       `json:"checked_in_tickets_count"`
 	TotalRevenue           float64                     `json:"total_revenue"`
 	OccupancyPercentage    float64                     `json:"occupancy_percentage"`
 	WaitlistWaitingCount   int64                       `json:"waitlist_waiting_count"`
@@ -754,6 +755,7 @@ func (h *EventHandler) GetEventAnalytics(w http.ResponseWriter, r *http.Request)
 		ConfirmedBookingsCount: summary.ConfirmedBookingsCount,
 		CancelledBookingsCount: summary.CancelledBookingsCount,
 		ValidTicketsCount:      summary.ValidTicketsCount,
+		CheckedInTicketsCount:  summary.CheckedInTicketsCount,
 		TotalRevenue:           parseNumericValue(summary.TotalRevenue),
 		OccupancyPercentage:    parseNumericValue(summary.OccupancyPercentage),
 		WaitlistWaitingCount:   summary.WaitlistWaitingCount,
