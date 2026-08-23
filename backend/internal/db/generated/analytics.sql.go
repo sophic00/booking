@@ -22,7 +22,7 @@ SELECT
     COUNT(DISTINCT CASE WHEN b.status = 'CANCELLED' THEN b.id END) AS cancelled_bookings_count,
     COUNT(DISTINCT CASE WHEN t.status IN ('VALID', 'CHECKED_IN') THEN t.id END) AS valid_tickets_count,
     COUNT(DISTINCT CASE WHEN t.status = 'CHECKED_IN' THEN t.id END) AS checked_in_tickets_count,
-    COALESCE(SUM(CASE WHEN b.status = 'CONFIRMED' THEN b.total_amount ELSE 0 END), 0.00) AS total_revenue,
+    COALESCE(SUM(CASE WHEN t.status IN ('VALID', 'CHECKED_IN') THEN t.unit_price ELSE 0 END), 0.00) AS total_revenue,
     COALESCE(
         ROUND((COUNT(DISTINCT CASE WHEN t.status IN ('VALID', 'CHECKED_IN') THEN t.id END)::numeric / NULLIF(v.total_capacity, 0)::numeric) * 100, 2),
         0.00
