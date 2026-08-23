@@ -153,7 +153,7 @@ func TestCheckout_Success(t *testing.T) {
 		},
 	}
 
-	handler := NewBookingHandler(mock, nil, &config.Config{JWTSecret: "test-secret"})
+	handler := NewBookingHandler(mock, nil, &config.Config{JWTSecret: "test-secret"}, nil)
 
 	body := CheckoutRequest{
 		EventID:   eventID.String(),
@@ -198,7 +198,7 @@ func TestCheckout_ExpiredHold(t *testing.T) {
 		},
 	}
 
-	handler := NewBookingHandler(mock, nil, &config.Config{JWTSecret: "test-secret"})
+	handler := NewBookingHandler(mock, nil, &config.Config{JWTSecret: "test-secret"}, nil)
 
 	body := CheckoutRequest{
 		EventID:   eventID.String(),
@@ -243,7 +243,7 @@ func TestListCustomerBookings_Success(t *testing.T) {
 		},
 	}
 
-	handler := NewBookingHandler(mock, nil, &config.Config{JWTSecret: "test-secret"})
+	handler := NewBookingHandler(mock, nil, &config.Config{JWTSecret: "test-secret"}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/customer/bookings", nil)
 	token, _, _ := auth.GenerateToken(customerID, "cust@example.com", "CUSTOMER", "test-secret", 1)
@@ -273,7 +273,7 @@ func TestCancelBooking_Success(t *testing.T) {
 	bookingID := uuid.New()
 
 	mock := &mockBookingQuerier{}
-	handler := NewBookingHandler(mock, nil, &config.Config{JWTSecret: "test-secret"})
+	handler := NewBookingHandler(mock, nil, &config.Config{JWTSecret: "test-secret"}, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/customer/bookings/"+bookingID.String()+"/cancel", nil)
 	token, _, _ := auth.GenerateToken(customerID, "cust@example.com", "CUSTOMER", "test-secret", 1)

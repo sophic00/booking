@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -18,6 +20,7 @@ import (
 
 	"ticket-booking/backend/internal/config"
 	"ticket-booking/backend/internal/db/generated"
+	"ticket-booking/backend/internal/email"
 	"ticket-booking/backend/internal/middleware"
 	"ticket-booking/backend/internal/qrcode"
 	"ticket-booking/backend/internal/utils"
@@ -27,13 +30,15 @@ type BookingHandler struct {
 	queries generated.Querier
 	pool    *pgxpool.Pool
 	cfg     *config.Config
+	mailer  *email.Service
 }
 
-func NewBookingHandler(queries generated.Querier, pool *pgxpool.Pool, cfg *config.Config) *BookingHandler {
+func NewBookingHandler(queries generated.Querier, pool *pgxpool.Pool, cfg *config.Config, mailer *email.Service) *BookingHandler {
 	return &BookingHandler{
 		queries: queries,
 		pool:    pool,
 		cfg:     cfg,
+		mailer:  mailer,
 	}
 }
 
@@ -226,13 +231,20 @@ func (h *BookingHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Confirm reservations
-		_, err = qtx.ConfirmReservationToBooked(r.Context(), generated.ConfirmReservationToBookedParams{
+		confirmedRows, err := qtx.ConfirmReservationToBooked(r.Context(), generated.ConfirmReservationToBookedParams{
 			EventID:   eventPgUUID,
 			HoldToken: holdTokenPgUUID,
 			BookingID: createdBooking.ID,
 		})
 		if err != nil {
 			RespondError(w, http.StatusInternalServerError, "DB_ERROR", "failed to confirm reservations")
+			return
+		}
+		if confirmedRows != int64(len(heldSeats)) {
+			// The hold expired concurrently and the background worker released
+			// the seats between our read and this update. Roll everything back
+			// instead of creating a booking without seat ownership.
+			RespondError(w, http.StatusConflict, "HOLD_EXPIRED", "your seat hold expired during checkout; the seats were released")
 			return
 		}
 
@@ -296,6 +308,8 @@ func (h *BookingHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	h.sendBookingConfirmationEmail(createdBooking.ID)
+
 	RespondSuccess(w, http.StatusCreated, BookingResponse{
 		ID:               utils.PgtypeToUUID(createdBooking.ID).String(),
 		BookingReference: createdBooking.BookingReference,
@@ -308,6 +322,71 @@ func (h *BookingHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 		Tickets:          createdTickets,
 		CreatedAt:        utils.PgtypeToTime(createdBooking.CreatedAt),
 	}, "Booking confirmed successfully")
+}
+
+// sendBookingConfirmationEmail best-effort emails the QR-code ticket to the
+// customer after a confirmed booking. Failures never affect the booking.
+func (h *BookingHandler) sendBookingConfirmationEmail(bookingID pgtype.UUID) {
+	if h.mailer == nil || !bookingID.Valid {
+		return
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+
+		booking, err := h.queries.GetBookingByID(ctx, bookingID)
+		if err != nil {
+			log.Printf("⚠️  Email worker: failed to load booking %s for confirmation email: %v", utils.PgtypeToUUID(bookingID), err)
+			return
+		}
+		tickets, err := h.queries.GetTicketsByBookingID(ctx, bookingID)
+		if err != nil {
+			log.Printf("⚠️  Email worker: failed to load tickets for booking %s: %v", utils.PgtypeToUUID(bookingID), err)
+			return
+		}
+
+		seats := make([]email.SeatInfo, 0, len(tickets))
+		var qrPNG []byte
+		qrName := "ticket.png"
+		for i, t := range tickets {
+			seats = append(seats, email.SeatInfo{
+				RowLabel:     t.RowLabel,
+				SeatNumber:   t.SeatNumber,
+				CategoryName: t.CategoryName,
+				UnitPrice:    utils.PgtypeNumericToFloat64(t.UnitPrice),
+			})
+			if i == 0 {
+				if png, err := qrcode.GeneratePNG(t.QrCodePayload, 300); err == nil {
+					qrPNG = png
+					qrName = fmt.Sprintf("ticket-%s%s.png", t.RowLabel, t.SeatNumber)
+				}
+			}
+		}
+
+		var start *time.Time
+		if booking.EventStartTime.Valid {
+			t := utils.PgtypeToTime(booking.EventStartTime)
+			start = &t
+		}
+
+		info := email.TicketConfirmation{
+			CustomerName:     booking.CustomerName,
+			EventTitle:       booking.EventTitle,
+			EventStartTime:   start,
+			VenueName:        booking.VenueName,
+			VenueCity:        booking.VenueCity,
+			BookingRef:       booking.BookingReference,
+			Seats:            seats,
+			TotalAmount:      utils.PgtypeNumericToFloat64(booking.TotalAmount),
+			Currency:         booking.Currency,
+			QRPNG:            qrPNG,
+			QRAttachmentName: qrName,
+		}
+		if err := h.mailer.SendTicketConfirmation(booking.CustomerEmail, info); err != nil {
+			log.Printf("⚠️  Failed to send ticket confirmation email to %s: %v", booking.CustomerEmail, err)
+		}
+	}()
 }
 
 // ListCustomerBookings retrieves the authenticated customer's booking history.
@@ -525,6 +604,10 @@ func (h *BookingHandler) CancelBooking(w http.ResponseWriter, r *http.Request) {
 			RespondError(w, http.StatusInternalServerError, "DB_ERROR", "failed to commit cancellation")
 			return
 		}
+
+		// Freed seats are offered to the next customers on the category
+		// waitlists asynchronously so the HTTP response is never blocked.
+		h.processWaitlistForCancelledBooking(cancelledBooking.EventID, bookingPgUUID)
 	} else {
 		var err error
 		cancelledBooking, err = h.queries.CancelBooking(r.Context(), generated.CancelBookingParams{
@@ -558,4 +641,34 @@ func (h *BookingHandler) CancelBooking(w http.ResponseWriter, r *http.Request) {
 		"status":            string(cancelledBooking.Status),
 		"cancelled_at":      cancelledAt,
 	}, "Booking cancelled successfully")
+}
+
+// processWaitlistForCancelledBooking offers each seat freed by a cancellation
+// to the next customer in line on that category's waitlist.
+func (h *BookingHandler) processWaitlistForCancelledBooking(eventID, bookingID pgtype.UUID) {
+	if h.pool == nil || h.cfg == nil || !eventID.Valid || !bookingID.Valid {
+		return
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		seats, err := h.queries.GetBookingFreedSeats(ctx, bookingID)
+		if err != nil {
+			log.Printf("⚠️  Waitlist worker: failed to list freed seats for booking %s: %v", utils.PgtypeToUUID(bookingID), err)
+			return
+		}
+		if len(seats) == 0 {
+			return
+		}
+
+		assigner := NewWaitlistAssigner(h.queries, h.pool, h.cfg, h.mailer)
+		eventUUID := utils.PgtypeToUUID(eventID)
+		for _, s := range seats {
+			if !assigner.AssignSeat(ctx, eventUUID, utils.PgtypeToUUID(s.SeatID)) {
+				break // no more candidates for this category (or assignment failed)
+			}
+		}
+	}()
 }
