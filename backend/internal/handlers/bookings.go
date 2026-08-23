@@ -667,7 +667,7 @@ func (h *BookingHandler) processWaitlistForCancelledBooking(eventID, bookingID p
 		eventUUID := utils.PgtypeToUUID(eventID)
 		for _, s := range seats {
 			if !assigner.AssignSeat(ctx, eventUUID, utils.PgtypeToUUID(s.SeatID)) {
-				break // no more candidates for this category (or assignment failed)
+				continue // no candidates for this seat/category, continue evaluating remaining freed seats
 			}
 		}
 	}()
