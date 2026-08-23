@@ -155,8 +155,6 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
   const selectedSeats = seatMap.filter((s) => selectedSeatIds.includes(s.seat_id));
   const subtotal = selectedSeats.reduce((sum, s) => sum + s.price, 0);
-  const bookingFee = selectedSeats.length > 0 ? selectedSeats.length * 3.5 : 0;
-  const grandTotal = subtotal + bookingFee;
   const isSoldOut = event.seats_left === 0 || event.badge?.includes("Sold Out");
 
   const categories = React.useMemo(() => {
@@ -571,16 +569,12 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           {selectedSeats.length > 0 && (
             <div className="space-y-2 pt-4 border-t border-slate-800 text-xs text-slate-300">
               <div className="flex justify-between">
-                <span className="text-slate-400">Seat Subtotal</span>
+                <span className="text-slate-400">Total Price ({selectedSeats.length} seat{selectedSeats.length > 1 ? "s" : ""})</span>
                 <span className="font-medium text-slate-200">${subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Service Fee ($3.50/tkt)</span>
-                <span className="font-medium text-slate-200">${bookingFee.toFixed(2)}</span>
               </div>
               <div className="flex justify-between pt-2 border-t border-slate-800 text-sm font-bold text-white">
                 <span>Grand Total</span>
-                <span className="text-emerald-400 font-mono">${grandTotal.toFixed(2)}</span>
+                <span className="text-emerald-400 font-mono">${subtotal.toFixed(2)}</span>
               </div>
             </div>
           )}
@@ -613,7 +607,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4 mr-2" />
-                    Complete Purchase (${grandTotal.toFixed(2)})
+                    Complete Purchase (${subtotal.toFixed(2)})
                   </>
                 )}
               </button>
