@@ -14,6 +14,7 @@ import {
   CalendarCheck,
   Building2,
   Sparkles,
+  ShieldCheck,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { SearchModal } from "./SearchModal";
@@ -138,6 +139,14 @@ export function Navbar() {
               >
                 Organiser Portal
               </Link>
+              <Link
+                href="/admin"
+                className={`transition hover:text-amber-300 ${
+                  pathname === "/admin" ? "text-amber-400 font-semibold" : ""
+                }`}
+              >
+                Admin
+              </Link>
             </nav>
 
             {/* Notification Bell */}
@@ -166,14 +175,14 @@ export function Navbar() {
                       {user.full_name}
                     </span>
                     <span className="text-[10px] text-indigo-400 font-mono block">
-                      {user.role === "CUSTOMER" ? "Fan" : "Organiser"}
+                      {user.role === "CUSTOMER" ? "Fan" : user.role === "ADMIN" ? "Admin" : "Organiser"}
                     </span>
                   </div>
                   <ChevronDown className="w-3 h-3 text-slate-400" />
                 </button>
 
                 {isProfileOpen && (
-                  <div className="absolute right-0 mt-2 w-60 bg-[#131A26] border border-slate-700 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in zoom-in-95">
+                  <div className="absolute right-0 mt-2 w-64 bg-[#131A26] border border-slate-700 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in zoom-in-95">
                     <div className="px-4 py-2 border-b border-slate-800">
                       <p className="text-xs font-semibold text-slate-200">{user.full_name}</p>
                       <p className="text-[11px] text-slate-400 truncate">{user.email}</p>
@@ -203,18 +212,27 @@ export function Navbar() {
                         Organiser Dashboard
                       </Link>
 
+                      <Link
+                        href="/admin"
+                        onClick={() => setIsProfileOpen(false)}
+                        className="flex items-center px-4 py-2 text-xs text-amber-300 hover:bg-slate-800 hover:text-amber-200 transition"
+                      >
+                        <ShieldCheck className="w-4 h-4 mr-2.5 text-amber-400" />
+                        Admin Venue Manager
+                      </Link>
+
                       {/* Quick Role Switcher */}
                       <div className="px-4 py-2 border-t border-slate-800/80 my-1">
                         <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider block mb-1">
                           Account Mode
                         </span>
-                        <div className="grid grid-cols-2 gap-1.5 bg-slate-900 p-1 rounded-lg">
+                        <div className="grid grid-cols-3 gap-1 bg-slate-900 p-1 rounded-lg">
                           <button
                             onClick={() => {
                               switchRole("CUSTOMER");
                               setIsProfileOpen(false);
                             }}
-                            className={`py-1 rounded text-[11px] font-medium transition ${
+                            className={`py-1 rounded text-[10px] font-medium transition ${
                               user.role === "CUSTOMER"
                                 ? "bg-indigo-600 text-white shadow"
                                 : "text-slate-400 hover:text-slate-200"
@@ -227,13 +245,26 @@ export function Navbar() {
                               switchRole("ORGANISER");
                               setIsProfileOpen(false);
                             }}
-                            className={`py-1 rounded text-[11px] font-medium transition ${
+                            className={`py-1 rounded text-[10px] font-medium transition ${
                               user.role === "ORGANISER"
                                 ? "bg-violet-600 text-white shadow"
                                 : "text-slate-400 hover:text-slate-200"
                             }`}
                           >
                             Organiser
+                          </button>
+                          <button
+                            onClick={() => {
+                              switchRole("ADMIN");
+                              setIsProfileOpen(false);
+                            }}
+                            className={`py-1 rounded text-[10px] font-medium transition ${
+                              user.role === "ADMIN"
+                                ? "bg-amber-600 text-white shadow"
+                                : "text-slate-400 hover:text-slate-200"
+                            }`}
+                          >
+                            Admin
                           </button>
                         </div>
                       </div>
