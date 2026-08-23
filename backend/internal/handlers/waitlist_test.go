@@ -156,9 +156,12 @@ func authenticatedWaitlistRequest(t *testing.T, userID uuid.UUID, method, path s
 
 func waitlistTestRouter(handler *WaitlistHandler) *chi.Mux {
 	r := chi.NewRouter()
-	r.Use(middleware.Authenticate("test-secret"))
-	r.Post("/api/v1/events/{id}/waitlist", handler.JoinWaitlist)
-	r.Post("/api/v1/waitlist/offers/{token}/accept", handler.AcceptOffer)
+	r.Get("/api/v1/waitlist/offers/{token}", handler.GetOfferDetails)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Authenticate("test-secret"))
+		r.Post("/api/v1/events/{id}/waitlist", handler.JoinWaitlist)
+		r.Post("/api/v1/waitlist/offers/{token}/accept", handler.AcceptOffer)
+	})
 	return r
 }
 
@@ -399,4 +402,24 @@ func TestAcceptOffer_AlreadyAccepted(t *testing.T) {
 
 	assert.Equal(t, http.StatusConflict, rr.Code)
 	assert.Contains(t, rr.Body.String(), "OFFER_NOT_PENDING")
+}
+
+func TestGetOfferDetails_Success(t *testing.T) {
+	offer := sampleOfferRow(uuid.New(), generated.OfferStatusPENDING, time.Now().Add(10*time.Minute))
+
+	mock := &mockWaitlistQuerier{
+		getWaitlistOfferByTokenFunc: func(ctx context.Context, token pgtype.UUID) (generated.GetWaitlistOfferByTokenRow, error) {
+			return offer, nil
+		},
+	}
+
+	handler := NewWaitlistHandler(mock, nil, &config.Config{JWTSecret: "test-secret"}, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/waitlist/offers/"+utils.PgtypeToUUID(offer.OfferToken).String(), nil)
+	rr := httptest.NewRecorder()
+
+	waitlistTestRouter(handler).ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Contains(t, rr.Body.String(), "Offer details retrieved")
+	assert.Contains(t, rr.Body.String(), utils.PgtypeToUUID(offer.OfferToken).String())
 }

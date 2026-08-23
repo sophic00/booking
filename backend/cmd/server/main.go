@@ -136,7 +136,8 @@ func main() {
 		r.Get("/events/{id}/seats", reservationHandler.GetEventSeatMap)
 
 		// Waitlist: join for a sold-out category & accept time-limited offers
-		// (authenticated customers only)
+		r.Get("/waitlist/offers/{token}", waitlistHandler.GetOfferDetails)
+
 		r.Group(func(r chi.Router) {
 			r.Use(appmiddleware.Authenticate(cfg.JWTSecret))
 			r.Use(appmiddleware.CustomerOnly)

@@ -19,8 +19,8 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import confetti from "canvas-confetti";
-import { acceptWaitlistOffer, fetchEventById } from "../../../lib/api";
-import { Booking, EventItem } from "../../../lib/types";
+import { acceptWaitlistOffer, fetchEventById, fetchWaitlistOffer } from "../../../lib/api";
+import { Booking, EventItem, WaitlistOfferDetail } from "../../../lib/types";
 import { useAuth } from "../../../context/AuthContext";
 
 function WaitlistOfferContent() {
@@ -31,28 +31,38 @@ function WaitlistOfferContent() {
 
   const { user, isLoading: authLoading } = useAuth();
   const [event, setEvent] = useState<EventItem | null>(null);
+  const [offerDetail, setOfferDetail] = useState<WaitlistOfferDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadEvent() {
-      if (!eventId) {
+    async function loadData() {
+      if (!token) {
         setLoading(false);
         return;
       }
       try {
-        const ev = await fetchEventById(eventId);
-        setEvent(ev);
-      } catch {
-        // Event metadata load is non-fatal
+        const offer = await fetchWaitlistOffer(token);
+        setOfferDetail(offer);
+        const targetEventId = offer.event_id || eventId;
+        if (targetEventId) {
+          try {
+            const ev = await fetchEventById(targetEventId);
+            setEvent(ev);
+          } catch {
+            // Event metadata load is non-fatal
+          }
+        }
+      } catch (err: any) {
+        setErrorMessage(err.message || "Failed to load waitlist offer. The offer may have expired.");
       } finally {
         setLoading(false);
       }
     }
-    loadEvent();
-  }, [eventId]);
+    loadData();
+  }, [token, eventId]);
 
   const handleAcceptOffer = async () => {
     if (!user) {
@@ -281,6 +291,30 @@ function WaitlistOfferContent() {
             </div>
           </div>
         </div>
+
+        {/* Allocated Seat Details */}
+        {offerDetail && (
+          <div className="p-4 rounded-2xl bg-[#0B0F17] border border-slate-800 space-y-3">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-400 font-mono">OFFERED SEAT:</span>
+              <span className="px-2.5 py-1 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-xs font-mono font-bold">
+                Row {offerDetail.row_label} • Seat {offerDetail.seat_number} ({offerDetail.category_name})
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-xs border-t border-slate-800/80 pt-2">
+              <span className="text-slate-400 font-mono">TICKET PRICE:</span>
+              <span className="text-base font-bold text-emerald-400 font-mono">
+                ${offerDetail.price.toFixed(2)} {offerDetail.currency}
+              </span>
+            </div>
+            {offerDetail.expires_at && (
+              <div className="flex justify-between items-center text-[11px] text-amber-400/90 font-mono border-t border-slate-800/80 pt-2">
+                <span>OFFER EXPIRES:</span>
+                <span>{new Date(offerDetail.expires_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Action Button */}
         <div className="space-y-3 pt-2">

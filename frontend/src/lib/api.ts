@@ -19,6 +19,7 @@ import {
   BatchCreateSeatsPayload,
   CategoryPricingPayloadItem,
   WaitlistEntry,
+  WaitlistOfferDetail,
 } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1";
@@ -493,6 +494,18 @@ export async function fetchCustomerWaitlists(): Promise<WaitlistEntry[]> {
 
   const data = await handleResponse<WaitlistEntry[]>(res, "Failed to fetch your waitlists");
   return Array.isArray(data) ? data : [];
+}
+
+export async function fetchWaitlistOffer(token: string): Promise<WaitlistOfferDetail> {
+  const res = await fetch(`${API_BASE}/waitlist/offers/${token}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeader(),
+    },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  return handleResponse<WaitlistOfferDetail>(res, "Failed to fetch waitlist offer details");
 }
 
 export async function acceptWaitlistOffer(token: string): Promise<Booking> {

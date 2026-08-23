@@ -224,7 +224,7 @@ export default function MyBookingsPage() {
                         Time-limited offer active!
                       </span>
                       <Link
-                        href={`/waitlist/offer?event=${w.event_id}`}
+                        href={`/waitlist/offer?token=${w.offer_token || ""}&event=${w.event_id}`}
                         className="px-3 py-1.5 rounded-xl font-bold text-xs text-white bg-emerald-600 hover:bg-emerald-500 transition shadow-md shadow-emerald-600/30 flex items-center"
                       >
                         Claim Seat Now

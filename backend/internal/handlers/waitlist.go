@@ -55,8 +55,30 @@ type WaitlistEntryResponse struct {
 	CategoryColor  *string    `json:"category_color,omitempty"`
 	Status         string     `json:"status"`
 	QueuePosition  int        `json:"queue_position"`
+	OfferToken     *string    `json:"offer_token,omitempty"`
+	OfferExpiresAt *time.Time `json:"offer_expires_at,omitempty"`
 	EventStartTime *time.Time `json:"event_start_time,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
+}
+
+type WaitlistOfferDetailResponse struct {
+	ID              string     `json:"id"`
+	WaitlistEntryID string     `json:"waitlist_entry_id"`
+	EventID         string     `json:"event_id"`
+	EventTitle      string     `json:"event_title"`
+	EventStartTime  *time.Time `json:"event_start_time,omitempty"`
+	EventEndTime    *time.Time `json:"event_end_time,omitempty"`
+	SeatID          string     `json:"seat_id"`
+	RowLabel        string     `json:"row_label"`
+	SeatNumber      string     `json:"seat_number"`
+	SeatCategoryID  string     `json:"seat_category_id"`
+	CategoryName    string     `json:"category_name"`
+	Price           float64    `json:"price"`
+	Currency        string     `json:"currency"`
+	OfferToken      string     `json:"offer_token"`
+	OfferedAt       time.Time  `json:"offered_at"`
+	ExpiresAt       time.Time  `json:"expires_at"`
+	Status          string     `json:"status"`
 }
 
 // ============================================================================
@@ -191,6 +213,14 @@ func (h *WaitlistHandler) ListMyWaitlist(w http.ResponseWriter, r *http.Request)
 			color := row.CategoryColor
 			entry.CategoryColor = &color
 		}
+		if row.OfferToken.Valid {
+			tok := utils.PgtypeToUUID(row.OfferToken).String()
+			entry.OfferToken = &tok
+		}
+		if row.OfferExpiresAt.Valid {
+			t := utils.PgtypeToTime(row.OfferExpiresAt)
+			entry.OfferExpiresAt = &t
+		}
 		if row.EventStartTime.Valid {
 			t := utils.PgtypeToTime(row.EventStartTime)
 			entry.EventStartTime = &t
@@ -199,6 +229,56 @@ func (h *WaitlistHandler) ListMyWaitlist(w http.ResponseWriter, r *http.Request)
 	}
 
 	RespondSuccess(w, http.StatusOK, res, "Waitlists retrieved")
+}
+
+// GetOfferDetails returns metadata and seat details for a waitlist offer token.
+func (h *WaitlistHandler) GetOfferDetails(w http.ResponseWriter, r *http.Request) {
+	offerToken, err := uuid.Parse(chi.URLParam(r, "token"))
+	if err != nil {
+		RespondError(w, http.StatusBadRequest, "INVALID_TOKEN", "invalid offer token format")
+		return
+	}
+
+	offer, err := h.queries.GetWaitlistOfferByToken(r.Context(), utils.UUIDToPgtype(offerToken))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			RespondError(w, http.StatusNotFound, "OFFER_NOT_FOUND", "offer not found")
+			return
+		}
+		RespondError(w, http.StatusInternalServerError, "DB_ERROR", "failed to retrieve offer")
+		return
+	}
+
+	var startTime *time.Time
+	if offer.EventStartTime.Valid {
+		t := utils.PgtypeToTime(offer.EventStartTime)
+		startTime = &t
+	}
+	var endTime *time.Time
+	if offer.EventEndTime.Valid {
+		t := utils.PgtypeToTime(offer.EventEndTime)
+		endTime = &t
+	}
+
+	RespondSuccess(w, http.StatusOK, WaitlistOfferDetailResponse{
+		ID:              utils.PgtypeToUUID(offer.ID).String(),
+		WaitlistEntryID: utils.PgtypeToUUID(offer.WaitlistEntryID).String(),
+		EventID:         utils.PgtypeToUUID(offer.EventID).String(),
+		EventTitle:      offer.EventTitle,
+		EventStartTime:  startTime,
+		EventEndTime:    endTime,
+		SeatID:          utils.PgtypeToUUID(offer.SeatID).String(),
+		RowLabel:        offer.RowLabel,
+		SeatNumber:      offer.SeatNumber,
+		SeatCategoryID:  utils.PgtypeToUUID(offer.SeatCategoryID).String(),
+		CategoryName:    offer.CategoryName,
+		Price:           utils.PgtypeNumericToFloat64(offer.Price),
+		Currency:        offer.Currency,
+		OfferToken:      utils.PgtypeToUUID(offer.OfferToken).String(),
+		OfferedAt:       utils.PgtypeToTime(offer.OfferedAt),
+		ExpiresAt:       utils.PgtypeToTime(offer.ExpiresAt),
+		Status:          string(offer.Status),
+	}, "Offer details retrieved")
 }
 
 // AcceptOffer converts a time-limited waitlist offer into a confirmed booking

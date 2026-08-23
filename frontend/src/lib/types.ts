@@ -224,8 +224,30 @@ export interface WaitlistEntry {
   category_color?: string;
   status: "WAITING" | "OFFERED" | "ACCEPTED" | "EXPIRED" | "CANCELLED";
   queue_position: number;
+  offer_token?: string;
+  offer_expires_at?: string;
   event_start_time?: string;
   created_at: string;
+}
+
+export interface WaitlistOfferDetail {
+  id: string;
+  waitlist_entry_id: string;
+  event_id: string;
+  event_title: string;
+  event_start_time?: string;
+  event_end_time?: string;
+  seat_id: string;
+  row_label: string;
+  seat_number: string;
+  seat_category_id: string;
+  category_name: string;
+  price: number;
+  currency: string;
+  offer_token: string;
+  offered_at: string;
+  expires_at: string;
+  status: string;
 }
 
 export interface CategoryBreakdown {

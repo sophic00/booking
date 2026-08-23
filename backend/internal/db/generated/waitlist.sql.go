@@ -293,11 +293,14 @@ SELECT
           AND prior.seat_category_id = we.seat_category_id 
           AND prior.status = 'WAITING' 
           AND prior.created_at < we.created_at
-    ) AS queue_position
+    ) AS queue_position,
+    wo.offer_token,
+    wo.expires_at AS offer_expires_at
 FROM waitlist_entries we
 JOIN events e ON we.event_id = e.id
 JOIN seat_categories sc ON we.seat_category_id = sc.id
-WHERE we.customer_id = $1 AND we.status = 'WAITING'
+LEFT JOIN waitlist_offers wo ON wo.waitlist_entry_id = we.id AND wo.status = 'PENDING' AND wo.expires_at > NOW()
+WHERE we.customer_id = $1 AND we.status IN ('WAITING', 'OFFERED')
 ORDER BY we.created_at DESC
 `
 
@@ -315,6 +318,8 @@ type GetCustomerWaitlistsRow struct {
 	CategoryName   string             `json:"category_name"`
 	CategoryColor  string             `json:"category_color"`
 	QueuePosition  int32              `json:"queue_position"`
+	OfferToken     pgtype.UUID        `json:"offer_token"`
+	OfferExpiresAt pgtype.Timestamptz `json:"offer_expires_at"`
 }
 
 func (q *Queries) GetCustomerWaitlists(ctx context.Context, customerID pgtype.UUID) ([]GetCustomerWaitlistsRow, error) {
@@ -340,6 +345,8 @@ func (q *Queries) GetCustomerWaitlists(ctx context.Context, customerID pgtype.UU
 			&i.CategoryName,
 			&i.CategoryColor,
 			&i.QueuePosition,
+			&i.OfferToken,
+			&i.OfferExpiresAt,
 		); err != nil {
 			return nil, err
 		}
