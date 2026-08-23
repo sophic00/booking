@@ -485,23 +485,66 @@ func (h *BookingHandler) CancelBooking(w http.ResponseWriter, r *http.Request) {
 	bookingPgUUID := utils.UUIDToPgtype(bookingID)
 	customerPgUUID := utils.UUIDToPgtype(customerID)
 
-	cancelledBooking, err := h.queries.CancelBooking(r.Context(), generated.CancelBookingParams{
-		ID:                 bookingPgUUID,
-		CancellationReason: pgtype.Text{String: reason, Valid: true},
-		CustomerID:         customerPgUUID,
-	})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			RespondError(w, http.StatusNotFound, "BOOKING_NOT_FOUND", "confirmed booking not found or already cancelled")
+	var cancelledBooking generated.Booking
+
+	if h.pool != nil {
+		tx, err := h.pool.Begin(r.Context())
+		if err != nil {
+			RespondError(w, http.StatusInternalServerError, "DB_ERROR", "failed to start cancellation transaction")
 			return
 		}
-		RespondError(w, http.StatusInternalServerError, "DB_ERROR", "failed to cancel booking")
-		return
-	}
+		defer tx.Rollback(r.Context())
 
-	// Void tickets and reservations
-	_, _ = h.queries.CancelBookingTickets(r.Context(), bookingPgUUID)
-	_, _ = h.queries.CancelBookingReservations(r.Context(), bookingPgUUID)
+		qtx := generated.New(tx)
+
+		cancelledBooking, err = qtx.CancelBooking(r.Context(), generated.CancelBookingParams{
+			ID:                 bookingPgUUID,
+			CancellationReason: pgtype.Text{String: reason, Valid: true},
+			CustomerID:         customerPgUUID,
+		})
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				RespondError(w, http.StatusNotFound, "BOOKING_NOT_FOUND", "confirmed booking not found or already cancelled")
+				return
+			}
+			RespondError(w, http.StatusInternalServerError, "DB_ERROR", "failed to cancel booking")
+			return
+		}
+
+		// Void tickets and reservations atomically
+		if _, err := qtx.CancelBookingTickets(r.Context(), bookingPgUUID); err != nil {
+			RespondError(w, http.StatusInternalServerError, "DB_ERROR", "failed to cancel tickets")
+			return
+		}
+		if _, err := qtx.CancelBookingReservations(r.Context(), bookingPgUUID); err != nil {
+			RespondError(w, http.StatusInternalServerError, "DB_ERROR", "failed to cancel reservations")
+			return
+		}
+
+		if err := tx.Commit(r.Context()); err != nil {
+			RespondError(w, http.StatusInternalServerError, "DB_ERROR", "failed to commit cancellation")
+			return
+		}
+	} else {
+		var err error
+		cancelledBooking, err = h.queries.CancelBooking(r.Context(), generated.CancelBookingParams{
+			ID:                 bookingPgUUID,
+			CancellationReason: pgtype.Text{String: reason, Valid: true},
+			CustomerID:         customerPgUUID,
+		})
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				RespondError(w, http.StatusNotFound, "BOOKING_NOT_FOUND", "confirmed booking not found or already cancelled")
+				return
+			}
+			RespondError(w, http.StatusInternalServerError, "DB_ERROR", "failed to cancel booking")
+			return
+		}
+
+		// Void tickets and reservations
+		_, _ = h.queries.CancelBookingTickets(r.Context(), bookingPgUUID)
+		_, _ = h.queries.CancelBookingReservations(r.Context(), bookingPgUUID)
+	}
 
 	var cancelledAt *time.Time
 	if cancelledBooking.CancelledAt.Valid {
