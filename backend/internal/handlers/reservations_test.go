@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -53,6 +54,7 @@ func (m *mockReservationQuerier) GetEventByID(ctx context.Context, id pgtype.UUI
 	return generated.GetEventByIDRow{
 		ID:             id,
 		Status:         generated.EventStatusPUBLISHED,
+		StartTime:      pgtype.Timestamptz{Time: time.Now().Add(24 * time.Hour), Valid: true},
 		HoldTtlSeconds: 600,
 	}, nil
 }
@@ -251,3 +253,40 @@ func TestReleaseHold_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
+
+func TestHoldSeats_EventAlreadyStarted(t *testing.T) {
+	userID := uuid.New()
+	eventID := uuid.New()
+	seatID := uuid.New()
+
+	mock := &mockReservationQuerier{
+		getEventByIDFunc: func(ctx context.Context, id pgtype.UUID) (generated.GetEventByIDRow, error) {
+			return generated.GetEventByIDRow{
+				ID:             id,
+				Status:         generated.EventStatusPUBLISHED,
+				StartTime:      pgtype.Timestamptz{Time: time.Now().Add(-1 * time.Hour), Valid: true},
+				HoldTtlSeconds: 600,
+			}, nil
+		},
+	}
+	handler := NewReservationHandler(mock, nil, &config.Config{JWTSecret: "test-secret"})
+
+	body := HoldSeatsRequest{
+		SeatIDs: []string{seatID.String()},
+	}
+	jsonBody, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/events/"+eventID.String()+"/hold", bytes.NewReader(jsonBody))
+	token, _, _ := auth.GenerateToken(userID, "user@example.com", "CUSTOMER", "test-secret", 1)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rr := httptest.NewRecorder()
+
+	r := chi.NewRouter()
+	r.Use(middleware.Authenticate("test-secret"))
+	r.Post("/api/v1/events/{id}/hold", handler.HoldSeats)
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusBadRequest, rr.Code)
+	assert.Contains(t, rr.Body.String(), "EVENT_ALREADY_STARTED")
+}
+

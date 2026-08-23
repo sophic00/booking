@@ -217,6 +217,11 @@ func (h *ReservationHandler) HoldSeats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if event.StartTime.Valid && event.StartTime.Time.Before(time.Now()) {
+		RespondError(w, http.StatusBadRequest, "EVENT_ALREADY_STARTED", "cannot hold seats for an event that has already started")
+		return
+	}
+
 	holdTTL := event.HoldTtlSeconds
 	if holdTTL <= 0 {
 		holdTTL = 600
