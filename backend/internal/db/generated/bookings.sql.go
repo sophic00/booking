@@ -89,7 +89,7 @@ const cancelBookingTickets = `-- name: CancelBookingTickets :many
 UPDATE tickets
 SET status = 'CANCELLED'
 WHERE booking_id = $1 AND status = 'VALID'
-RETURNING id, booking_id, event_id, seat_id, unit_price, qr_code_payload, status, created_at
+RETURNING id, booking_id, event_id, seat_id, unit_price, qr_code_payload, status, created_at, checked_in_at
 `
 
 func (q *Queries) CancelBookingTickets(ctx context.Context, bookingID pgtype.UUID) ([]Ticket, error) {
@@ -110,6 +110,7 @@ func (q *Queries) CancelBookingTickets(ctx context.Context, bookingID pgtype.UUI
 			&i.QrCodePayload,
 			&i.Status,
 			&i.CreatedAt,
+			&i.CheckedInAt,
 		); err != nil {
 			return nil, err
 		}
@@ -177,7 +178,7 @@ INSERT INTO tickets (
     status
 ) VALUES (
     $1, $2, $3, $4, $5, 'VALID'
-) RETURNING id, booking_id, event_id, seat_id, unit_price, qr_code_payload, status, created_at
+) RETURNING id, booking_id, event_id, seat_id, unit_price, qr_code_payload, status, created_at, checked_in_at
 `
 
 type CreateTicketParams struct {
@@ -206,6 +207,7 @@ func (q *Queries) CreateTicket(ctx context.Context, arg CreateTicketParams) (Tic
 		&i.QrCodePayload,
 		&i.Status,
 		&i.CreatedAt,
+		&i.CheckedInAt,
 	)
 	return i, err
 }
@@ -437,7 +439,7 @@ func (q *Queries) GetCustomerBookings(ctx context.Context, customerID pgtype.UUI
 
 const getTicketsByBookingID = `-- name: GetTicketsByBookingID :many
 SELECT 
-    t.id, t.booking_id, t.event_id, t.seat_id, t.unit_price, t.qr_code_payload, t.status, t.created_at,
+    t.id, t.booking_id, t.event_id, t.seat_id, t.unit_price, t.qr_code_payload, t.status, t.created_at, t.checked_in_at,
     s.row_label,
     s.seat_number,
     s.grid_row,
@@ -461,6 +463,7 @@ type GetTicketsByBookingIDRow struct {
 	QrCodePayload  string             `json:"qr_code_payload"`
 	Status         TicketStatus       `json:"status"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	CheckedInAt    pgtype.Timestamptz `json:"checked_in_at"`
 	RowLabel       string             `json:"row_label"`
 	SeatNumber     string             `json:"seat_number"`
 	GridRow        int32              `json:"grid_row"`
@@ -488,6 +491,7 @@ func (q *Queries) GetTicketsByBookingID(ctx context.Context, bookingID pgtype.UU
 			&i.QrCodePayload,
 			&i.Status,
 			&i.CreatedAt,
+			&i.CheckedInAt,
 			&i.RowLabel,
 			&i.SeatNumber,
 			&i.GridRow,

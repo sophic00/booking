@@ -443,6 +443,7 @@ type Ticket struct {
 	QrCodePayload string             `json:"qr_code_payload"`
 	Status        TicketStatus       `json:"status"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	CheckedInAt   pgtype.Timestamptz `json:"checked_in_at"`
 }
 
 type User struct {

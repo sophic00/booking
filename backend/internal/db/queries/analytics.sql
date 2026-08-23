@@ -7,10 +7,11 @@ SELECT
     v.total_capacity,
     COUNT(DISTINCT CASE WHEN b.status = 'CONFIRMED' THEN b.id END) AS confirmed_bookings_count,
     COUNT(DISTINCT CASE WHEN b.status = 'CANCELLED' THEN b.id END) AS cancelled_bookings_count,
-    COUNT(DISTINCT CASE WHEN t.status = 'VALID' THEN t.id END) AS valid_tickets_count,
+    COUNT(DISTINCT CASE WHEN t.status IN ('VALID', 'CHECKED_IN') THEN t.id END) AS valid_tickets_count,
+    COUNT(DISTINCT CASE WHEN t.status = 'CHECKED_IN' THEN t.id END) AS checked_in_tickets_count,
     COALESCE(SUM(CASE WHEN b.status = 'CONFIRMED' THEN b.total_amount ELSE 0 END), 0.00) AS total_revenue,
     COALESCE(
-        ROUND((COUNT(DISTINCT CASE WHEN t.status = 'VALID' THEN t.id END)::numeric / NULLIF(v.total_capacity, 0)::numeric) * 100, 2),
+        ROUND((COUNT(DISTINCT CASE WHEN t.status IN ('VALID', 'CHECKED_IN') THEN t.id END)::numeric / NULLIF(v.total_capacity, 0)::numeric) * 100, 2),
         0.00
     ) AS occupancy_percentage,
     (
@@ -31,8 +32,8 @@ SELECT
     sc.name AS category_name,
     sc.color_code,
     COUNT(DISTINCT s.id) AS total_seats,
-    COUNT(DISTINCT CASE WHEN t.status = 'VALID' THEN t.id END) AS booked_seats,
-    COALESCE(SUM(CASE WHEN t.status = 'VALID' THEN t.unit_price ELSE 0 END), 0.00) AS revenue,
+    COUNT(DISTINCT CASE WHEN t.status IN ('VALID', 'CHECKED_IN') THEN t.id END) AS booked_seats,
+    COALESCE(SUM(CASE WHEN t.status IN ('VALID', 'CHECKED_IN') THEN t.unit_price ELSE 0 END), 0.00) AS revenue,
     (
         SELECT COUNT(*) 
         FROM waitlist_entries we 
@@ -41,7 +42,7 @@ SELECT
 FROM seats s
 JOIN events e ON e.venue_id = s.venue_id AND e.id = $1
 JOIN seat_categories sc ON s.seat_category_id = sc.id
-LEFT JOIN tickets t ON t.event_id = e.id AND t.seat_id = s.id AND t.status = 'VALID'
+LEFT JOIN tickets t ON t.event_id = e.id AND t.seat_id = s.id AND t.status IN ('VALID', 'CHECKED_IN')
 WHERE s.is_active = TRUE
 GROUP BY sc.id, sc.name, sc.color_code
 ORDER BY sc.name ASC;
