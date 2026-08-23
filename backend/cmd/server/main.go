@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -43,6 +44,26 @@ func main() {
 	eventHandler := handlers.NewEventHandler(queries, database.Pool)
 	reservationHandler := handlers.NewReservationHandler(queries, database.Pool, cfg)
 	bookingHandler := handlers.NewBookingHandler(queries, database.Pool, cfg)
+
+	// Start background worker for hold TTL auto-release
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				released, err := queries.BulkReleaseExpiredHolds(ctx)
+				if err != nil && !errors.Is(err, context.Canceled) {
+					log.Printf("⚠️  Hold expiration worker error: %v", err)
+				} else if released > 0 {
+					log.Printf("🧹 Auto-released %d expired seat holds", released)
+				}
+			}
+		}
+	}()
 
 	r := chi.NewRouter()
 
